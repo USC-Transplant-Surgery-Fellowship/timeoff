@@ -11,7 +11,7 @@
 (function () {
   var CONFIG = {
     API_URL: 'https://script.google.com/macros/s/AKfycbzyKKmoG8PJAqDHuNzXEINMw3gUfY-ctND7aSqzrDCV0l6P8C_SYY6VmU3IzIcYFb76/exec',
-    CLIENT_ID: 'REPLACE_WITH_OAUTH_CLIENT_ID.apps.googleusercontent.com',
+    CLIENT_ID: '72967386715-cgntqve43vc2ptpkhprgalf714vtke38.apps.googleusercontent.com',
   };
   var TOKEN_KEY = 'timeoff.idToken';
   var opts = null, gisReady = false;
