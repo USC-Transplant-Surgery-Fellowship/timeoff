@@ -25,6 +25,7 @@ This repository holds **only the pages**. There is no personal data here. The sc
 | `admin/index.html` | Admin page |
 | `assets/api.js` | **Settings** (Apps Script URL, Google sign-in client ID), sign-in, and calls to the server |
 | `assets/styles.css` | Styles for both pages |
+| `privacy.html` | Privacy page (linked from the Google sign-in screen) |
 | `CNAME` | The custom domain for GitHub Pages |
 
 ## Making changes
