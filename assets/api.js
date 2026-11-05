@@ -93,12 +93,14 @@
           linkButton('Sign in with a different account', signOut)]);
         return;
       }
+      // "Signed in as …", then the pager's buttons: the other view (for people who are both fellow and admin) and Sign out.
       var w = $('who'); clear(w);
-      w.appendChild(document.createTextNode('Signed in as ' + (opts.need === 'admin' ? who.email : who.name)));
-      if (opts.need === 'fellow' && who.isAdmin && opts.adminUrl) { w.appendChild(document.createTextNode(' · ')); var a = el('a', 'toplink', 'Admin view'); a.href = opts.adminUrl; w.appendChild(a); }
-      if (opts.need === 'admin' && who.isFellow && opts.fellowUrl) { w.appendChild(document.createTextNode(' · ')); var f = el('a', 'toplink', 'Fellow view'); f.href = opts.fellowUrl; w.appendChild(f); }
-      w.appendChild(document.createTextNode(' · '));
-      w.appendChild(linkButton('Sign out', signOut));
+      w.appendChild(el('span', 'who-name', 'Signed in as ' + (opts.need === 'admin' ? who.email : who.name)));
+      var actions = el('span', 'who-actions');
+      if (opts.need === 'fellow' && who.isAdmin && opts.adminUrl) { var a = el('a', 'toplink', 'Admin view'); a.href = opts.adminUrl; actions.appendChild(a); }
+      if (opts.need === 'admin' && who.isFellow && opts.fellowUrl) { var f = el('a', 'toplink', 'Fellow view'); f.href = opts.fellowUrl; actions.appendChild(f); }
+      actions.appendChild(linkButton('Sign out', signOut));
+      w.appendChild(actions);
       showApp(true);
       opts.onReady(who);
     }, function (err) {
