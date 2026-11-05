@@ -152,7 +152,7 @@
       var t = $('totals');
       clear(t);
       var r = state.view.rules;
-      $('totalsTitle').textContent = 'Vacation days, ' + (state.view.tallies[0] ? state.view.tallies[0].yearLabel : '');
+      $('totalsTitle').textContent = 'Vacation days';
       var head = el('tr');
       ['Fellow', 'Used', 'Planned', 'Left'].forEach(function (h) { head.appendChild(el('th', null, h)); });
       t.appendChild(head);
@@ -406,7 +406,7 @@
 
     function renderIssues(res, scroll) {
       $('checkCard').hidden = false;
-      $('checkTitle').textContent = 'Rule check, ' + res.yearLabel + ': ' + (res.issues.length ? plural(res.issues.length, 'issue') : 'no issues');
+      $('checkTitle').textContent = 'Rule check: ' + (res.issues.length ? plural(res.issues.length, 'issue') : 'no issues');
       var list = $('issues');
       clear(list);
       if (!res.issues.length) list.appendChild(el('li', 'empty', 'Everything on the calendar follows the rules.'));
