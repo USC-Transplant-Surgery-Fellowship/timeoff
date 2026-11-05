@@ -173,7 +173,7 @@ main { max-width: 1120px; margin: 0 auto; padding: 4px 16px 48px; }
   main.admin:not([hidden]) { display: flex; flex-direction: column; }
   main.admin > .col { display: contents; }
   #monthCard { order: 1; } #checkCard { order: 2; } #totalsCard { order: 3; }
-  #offCard { order: 4; } #makeCard { order: 5; } #peopleCard { order: 6; } #logCard { order: 7; }
+  #offCard { order: 4; } #makeCard { order: 5; } #logCard { order: 6; }
 }
 
 .card {
@@ -249,7 +249,7 @@ select:hover, input:hover { border-color: var(--muted); }
   color: #fff; background: var(--cardinal); border-color: var(--cardinal-deep);
   box-shadow: 0 2px 0 var(--cardinal-deep), inset 0 -3px 0 var(--gold);
 }
-.tab[aria-checked="true"] { /* keys that work like radio buttons */
+.tab[aria-checked="true"], .tab[aria-pressed="true"] { /* keys that work like radio buttons, or toggle on and off */
   color: #fff; background: var(--cardinal); border-color: var(--cardinal-deep);
   box-shadow: 0 2px 0 var(--cardinal-deep), inset 0 -3px 0 var(--gold);
 }
@@ -415,7 +415,10 @@ body.busy main { opacity: .6; pointer-events: none; transition: opacity .15s; }
 .daterow { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
 
 /* ── recent changes (both admin pages) ── */
-.log { list-style: none; margin: 0; padding: 0; font-size: 14px; }
+.log { list-style: none; margin: 0; padding: 0 6px 0 0; font-size: 14px; }
+/* Long change logs scroll inside their card after about ten entries. */
+.log { max-height: 420px; overflow-y: auto; overscroll-behavior: contain; }
+.log:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .log li { padding: 7px 0; border-top: 1px solid var(--line); overflow-wrap: anywhere; }
 .log li:first-child { border-top: 0; padding-top: 0; }
 .log .when { display: block; font-size: 13px; color: var(--muted); }
