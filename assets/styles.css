@@ -128,6 +128,8 @@ button { -webkit-tap-highlight-color: transparent; }
   animation: lcd-wake .7s ease-out both;
 }
 .eyebrow { font: 800 14px/1.2 'Doto', monospace; letter-spacing: .01em; opacity: .9; animation: lcd-flicker .45s steps(3) .15s both; }
+/* The dates the sites cover (from the server, after sign-in), shown once here instead of in every section title. */
+.lcd-range { display: block; margin-top: 6px; font: 800 15px/1.2 'Doto', monospace; letter-spacing: .01em; }
 h1 {
   display: inline-block;
   margin: 4px 0 0;

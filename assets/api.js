@@ -220,12 +220,22 @@
         return;
       }
       renderHeader(who);
+      showRange(who.range);
       showApp(true);
       opts.onReady(who);
     }, function (err) {
       if (err.code === 'auth') return; // call() already showed the sign-in card
       card('Something went wrong', [err.message, linkButton('Try again', checkWho)]);
     });
+  }
+
+  /* The dates the sites cover ("Aug 2026 – Jul 2027"), shown once in the header's display for every page. */
+  function showRange(range) {
+    var lcd = document.querySelector('.lcd');
+    if (!lcd || !range) return;
+    var r = lcd.querySelector('.lcd-range');
+    if (!r) { r = el('div', 'lcd-range'); lcd.appendChild(r); }
+    r.textContent = range;
   }
 
   /* "Signed in as …", then links: this site's other page, the other sites (their admin pages from an admin page), Sign out. */
