@@ -250,6 +250,7 @@ select:hover, input:hover { border-color: var(--muted); }
   box-shadow: 0 2px 0 var(--cardinal-deep), inset 0 -3px 0 var(--gold);
 }
 .tabs5 { margin-top: 14px; }
+.tabs4 { grid-template-columns: repeat(2, 1fr); }
 
 /* ── weekend options ── */
 .options { display: grid; gap: 8px; margin-bottom: 14px; }
@@ -290,7 +291,8 @@ select:hover, input:hover { border-color: var(--muted); }
 }
 .cell.mine .tag { color: var(--gold-ink); background: var(--gold); }
 .cell.weekendday { background-image: repeating-linear-gradient(135deg, var(--hatch) 0 2px, transparent 2px 7px); }
-.cell.out, .cell.past, .cell.muted { opacity: .4; }
+.cell.out, .cell.past:not(.ok):not(.sel), .cell.muted { opacity: .4; }
+button.cell.ok.past:not(.sel) { opacity: .72; border-style: dashed; } /* past days that can still be picked */
 button.cell { cursor: pointer; }
 button.cell.ok { border-color: var(--line-strong); box-shadow: 0 2px 0 var(--line-strong); } /* pickable days are raised keys */
 button.cell.ok:hover { border-color: var(--accent); }
@@ -398,6 +400,8 @@ body.busy main { opacity: .6; pointer-events: none; transition: opacity .15s; }
   background: var(--gold-soft); border: 1.5px solid var(--gold-edge); border-radius: 8px; padding: 10px 12px; margin-bottom: 12px;
 }
 .override-toggle b { color: var(--ink); }
+.customform .override-toggle { margin-top: 2px; }
+.ack-note { margin-top: 6px; color: var(--err); font-weight: 700; font-size: 14px; }
 .override-toggle input { margin-top: 2px; width: 20px; height: 20px; accent-color: #990000; flex: 0 0 auto; }
 .customform { margin-bottom: 14px; }
 .customform input { margin-bottom: 10px; }
@@ -453,6 +457,7 @@ details[open] > .people-summary { padding-bottom: 10px; margin-bottom: 4px; bord
 /* ── bigger screens ── */
 @media (min-width: 600px) {
   .tabs5 { grid-template-columns: repeat(5, 1fr); }
+  .tabs4 { grid-template-columns: repeat(4, 1fr); }
   .cell { min-height: 64px; }
   .card { padding: 20px 22px 22px; }
 }
