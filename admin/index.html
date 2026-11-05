@@ -40,7 +40,6 @@
     <section class="card" id="totalsCard">
       <h2 id="totalsTitle">Vacation days</h2>
       <table class="totals" id="totals"></table>
-      <p class="hint small" id="totalsHint"></p>
     </section>
 
     <section class="card" id="offCard">
@@ -51,14 +50,9 @@
     <section class="card" id="logCard">
       <h2>Recent changes</h2>
       <p class="hint">Everything changed through this site — by fellows and admins — newest first.</p>
-      <ul class="log" id="log"></ul>
+      <ul class="log" id="log" tabindex="0" aria-label="Recent changes"></ul>
     </section>
 
-    <section class="card" id="peopleCard">
-      <h2>People &amp; access</h2>
-      <p class="hint">Fellows, admins and viewers are managed in the portal, for all the fellowship sites at once.</p>
-      <a class="secondary buttonlink" href="https://portal.usctransplant.life/">Open the portal</a>
-    </section>
     </div>
 
     <div class="col wide">
@@ -159,7 +153,6 @@
       clear(t);
       var r = state.view.rules;
       $('totalsTitle').textContent = 'Vacation days, ' + (state.view.tallies[0] ? state.view.tallies[0].yearLabel : '');
-      $('totalsHint').textContent = r.countedDays + ' days in any time off that isn’t a weekend (vacation, conferences, …). Limit ' + r.vacationLimit + ' per year.';
       var head = el('tr');
       ['Fellow', 'Used', 'Planned', 'Left'].forEach(function (h) { head.appendChild(el('th', null, h)); });
       t.appendChild(head);
@@ -244,8 +237,7 @@
       });
       var name = v.member, r = v.rules;
       var hints = {
-        weekend: 'Give ' + name + ' a ' + r.weekendDays + ' weekend. Same rules as fellows (' + (r.weekendsPerMonth === 1 ? 'one' : r.weekendsPerMonth) +
-          ' per month, one person off at a time unless overridden), but past dates are allowed.',
+        weekend: 'Give ' + name + ' a ' + r.weekendDays + ' weekend.',
         vacation: 'Tap days (' + r.vacationDays + ') to give ' + name + ' vacation. ' + name + ' has ' + plural(tallyFor(name).remaining, 'day') + ' left. Past dates are allowed.',
         extra: v.fiveWeekends
           ? v.monthLabel + ' has ' + r.extraWeekendMin + ' weekends. Tap a ' + r.extraWeekendDays + ' to give ' + name + ' an extra weekend day (each day separately).'
