@@ -24,7 +24,8 @@ This repository holds **only the pages**. There is no personal data here. The sc
 | `index.html` | Fellow page |
 | `admin/index.html` | Admin page |
 | `assets/api.js` | **Settings** (Apps Script URL, Google sign-in client ID), sign-in, and calls to the server |
-| `assets/styles.css` | Styles for both pages |
+| `assets/styles.css` | Styles for all pages. The look (the pager header, colors, light and dark themes) is explained at the top of the file |
+| `assets/fonts/` | The two fonts, stored here so nothing loads from elsewhere: Doto (the pager screen) and Atkinson Hyperlegible Next (everything else), both under the SIL Open Font License |
 | `privacy.html` | Privacy page (linked from the Google sign-in screen) |
 | `CNAME` | The custom domain for GitHub Pages |
 
