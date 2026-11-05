@@ -2,7 +2,7 @@
 
 The time-off request site for the USC Transplant Surgery Fellowship: **https://timeoff.usctransplant.life**
 
-- **Fellows** request a Thursday–Sunday weekend off or vacation days, see who else is off and who cross-covers, and remove their own upcoming time off.
+- **Fellows** request a Thursday–Sunday weekend off or vacation days, see who else is off and who cross-covers, add their own conferences and other time off (counted toward the 20 days), and remove their own time off. They can look at any month of the year; vacation and conference days can be added or removed on past dates too (weekends only before they start).
 - **Admins** (`/admin/`) do the same for any fellow, past or future, assign extra weekend days and custom time off, change cross-cover, see everyone's totals, and check the whole calendar against the rules (with buttons to fix what it finds).
 
 ## How it fits together

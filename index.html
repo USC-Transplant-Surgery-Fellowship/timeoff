@@ -42,13 +42,26 @@
     <div class="col wide">
     <section class="card">
       <h2>Request or remove time off</h2>
-      <div class="tabs" role="tablist">
+      <div class="tabs" id="tabs" role="tablist">
         <button class="tab" role="tab" data-mode="weekend" type="button">Weekend Off</button>
         <button class="tab" role="tab" data-mode="vacation" type="button">Vacation</button>
+        <button class="tab" role="tab" data-mode="custom" type="button" hidden>Conference / Other</button>
         <button class="tab" role="tab" data-mode="remove" type="button">Remove</button>
       </div>
       <p class="hint" id="hint"></p>
       <div class="options" id="weekendOptions" role="radiogroup" aria-label="Weekend options"></div>
+      <div class="customform" id="customForm" style="display:none">
+        <label class="label" for="customLabel">What is it?</label>
+        <input id="customLabel" type="text" maxlength="80" placeholder="e.g. ASTS Winter Symposium">
+        <div class="daterow">
+          <div><label class="label" for="customStart">First day</label><input id="customStart" type="date"></div>
+          <div><label class="label" for="customEnd">Last day</label><input id="customEnd" type="date"></div>
+        </div>
+        <label class="override-toggle" id="ackRow">
+          <input type="checkbox" id="ack">
+          <span><b>Another fellow is also off on some of these days, and I know</b><br>For example, you’re both going to the same conference. Each service still gets its own cross-cover.</span>
+        </label>
+      </div>
       <div class="cal" id="calendar" aria-label="Month calendar"></div>
       <ul class="legend" aria-label="Calendar key">
         <li><span class="swatch tag-other">AB</span> Someone else is off (their initials)</li>
@@ -110,6 +123,8 @@
 
     /* ── rendering ── */
     function render(view) {
+      // A new month starts the conference form fresh, so old dates can't be sent for the wrong month.
+      if (!state.view || state.view.month !== view.month) { $('customLabel').value = ''; $('customStart').value = ''; $('customEnd').value = ''; $('ack').checked = false; }
       state.view = view;
       resetSelection();
       renderMonths();
@@ -186,21 +201,45 @@
         t.setAttribute('aria-selected', t.getAttribute('data-mode') === state.mode ? 'true' : 'false');
       });
       var v = state.view;
-      if (state.mode === 'weekend') {
+      var customTab = document.querySelector('.tab[data-mode="custom"]');
+      customTab.hidden = !v.rules.canAddCustom;
+      $('tabs').classList.toggle('tabs4', !!v.rules.canAddCustom);
+      if (state.mode === 'custom' && !v.rules.canAddCustom) state.mode = 'weekend';
+      $('customForm').style.display = state.mode === 'custom' ? '' : 'none';
+      $('ackRow').style.display = v.rules.customAcknowledge ? '' : 'none';
+      if (state.mode === 'custom') {
+        $('customStart').min = v.month + '-01';
+        $('customStart').max = v.grid.filter(function (c) { return c.inMonth; }).slice(-1)[0].key;
+        $('customEnd').min = $('customStart').value || $('customStart').min;
+      }
+      if (state.mode === 'custom') {
+        var pastCustom = (v.rules.pastKinds || []).indexOf('custom') !== -1;
+        $('hint').textContent = 'For a conference or other time off that isn’t a weekend or vacation. It goes on the calendar as "' +
+          v.fellowName + ' - <what it is>", its ' + v.rules.countedDays + ' days count toward your ' + v.rules.vacationLimit +
+          ' vacation days, and cross-cover is added. Up to ' + v.rules.customMaxDays + ' days, starting in ' + v.monthLabel + '.' +
+          (pastCustom ? ' Past dates are fine.' : '') +
+          (v.rules.customAcknowledge ? ' If another fellow is off then too, tick the box below to add it anyway.' : ' If another fellow is off then too, ask an admin to add it.');
+      } else if (state.mode === 'weekend') {
         var perMonth = v.rules.weekendsPerMonth === 1 ? 'One weekend off per month' : 'Up to ' + v.rules.weekendsPerMonth + ' weekends off per month';
         $('hint').textContent = v.myWeekend
           ? 'You already have a weekend off this month (' + v.myWeekend + '). ' + perMonth + '.'
           : 'Pick a ' + v.rules.weekendDays + ' weekend. ' + perMonth + ', and only one person off at a time.';
       } else if (state.mode === 'vacation') {
+        var pastVac = (v.rules.pastKinds || []).indexOf('vacation') !== -1;
         $('hint').textContent = 'Tap the days you want off (' + v.rules.vacationDays + '). You have ' + v.tally.remaining +
-          ' vacation day' + (v.tally.remaining === 1 ? '' : 's') + ' left. Days with someone already off can’t be picked.';
+          ' vacation day' + (v.tally.remaining === 1 ? '' : 's') + ' left. Days with someone already off can’t be picked.' +
+          (pastVac ? ' Past days (dashed) can be added too, to record vacation you already took.' : '');
       } else {
         var any = v.grid.some(function (c) { return c.removeDays.length; });
+        var past = v.rules.pastKinds || [];
+        var pastNote = past.length === 0 ? 'past days'
+          : past.indexOf('weekend') === -1 ? 'weekends that have already started' : '';
         $('hint').textContent = any
-          ? 'Tap your upcoming ' + v.rules.fellowsRemove + ' days (yellow) to remove them. ' +
+          ? 'Tap your ' + v.rules.fellowsRemove + ' days (yellow) to remove them. ' +
             (v.rules.weekendsRemovedWhole ? 'A weekend is removed as a whole. ' : '') +
-            'The matching cross-cover is removed too. Other time off (like conferences) and past days can’t be removed here.'
-          : 'You have no upcoming ' + v.rules.fellowsRemove + ' days you can remove in ' + v.monthLabel + '.';
+            'The matching cross-cover is removed too.' +
+            (pastNote ? ' ' + pastNote.charAt(0).toUpperCase() + pastNote.slice(1) + ' can’t be removed here.' : '')
+          : 'You have no ' + v.rules.fellowsRemove + ' days you can remove in ' + v.monthLabel + '.';
       }
       $('legendRemove').style.display = state.mode === 'remove' ? '' : 'none';
       $('legendSelect').style.display = state.mode === 'remove' ? 'none' : '';
@@ -239,7 +278,8 @@
       var cal = $('calendar');
       clear(cal);
       DOW.forEach(function (d) { cal.appendChild(el('div', 'dow', d)); });
-      var weekendDays = {};
+      var weekendDays = {}, customChosen = {};
+      if (state.mode === 'custom') customDays().forEach(function (k) { customChosen[k] = true; });
       if (state.mode === 'weekend' && state.weekend) {
         for (var i = 0; i < state.view.rules.weekendLength; i++) weekendDays[addDays(state.weekend, i)] = true;
       }
@@ -247,13 +287,13 @@
         var clickable = (state.mode === 'vacation' && c.vacationOk) || (state.mode === 'remove' && c.removeDays.length > 0);
         var cell = el(clickable ? 'button' : 'div', 'cell');
         if (clickable) { cell.type = 'button'; cell.classList.add('ok'); }
-        else if (state.mode !== 'weekend' && c.inMonth) cell.classList.add('muted');
+        else if (state.mode !== 'weekend' && state.mode !== 'custom' && c.inMonth) cell.classList.add('muted');
         if (!c.inMonth) cell.classList.add('out');
         if (c.past && c.inMonth) cell.classList.add('past');
         var dow = new Date(c.key + 'T12:00:00Z').getUTCDay();
         if (dow === 0 || dow === 6) cell.classList.add('weekendday');
         if (c.off.some(function (o) { return o.mine; })) cell.classList.add('mine');
-        if (weekendDays[c.key] || state.vacation[c.key]) cell.classList.add('sel');
+        if (weekendDays[c.key] || state.vacation[c.key] || customChosen[c.key]) cell.classList.add('sel');
         if (state.remove[c.key]) cell.classList.add('sel', 'removing');
         cell.appendChild(el('span', 'num', String(c.day)));
         c.off.forEach(function (o) {
@@ -293,6 +333,13 @@
       renderSelection();
     }
 
+    function customDays() {
+      var a = $('customStart').value, b = $('customEnd').value || a, days = [];
+      if (!a || b < a) return days;
+      for (var k = a; k <= b && days.length < 62; k = addDays(k, 1)) days.push(k);
+      return days;
+    }
+
     function toggleRemove(days) {
       var allOn = days.every(function (d) { return state.remove[d]; });
       days.forEach(function (d) { if (allOn) delete state.remove[d]; else state.remove[d] = true; });
@@ -312,6 +359,23 @@
         }
         btn.disabled = !state.weekend;
         btn.textContent = 'Request weekend off';
+      } else if (state.mode === 'custom') {
+        var cd = customDays(), lbl = $('customLabel').value.trim();
+        if (cd.length) {
+          var weekdays = cd.filter(function (k) { var w = new Date(k + 'T12:00:00Z').getUTCDay(); return w > 0 && w < 6; }).length;
+          box.appendChild(el('b', null, '"' + state.view.fellowName + ' - ' + (lbl || '…') + '": '));
+          box.appendChild(document.createTextNode(dayLabel(cd[0]) + (cd.length > 1 ? ' – ' + dayLabel(cd[cd.length - 1]) : '') +
+            ' (' + weekdays + ' weekday' + (weekdays === 1 ? '' : 's') + ' counted)'));
+          var others = {};
+          state.view.grid.forEach(function (c) {
+            if (cd.indexOf(c.key) !== -1) c.off.forEach(function (o) { if (!o.mine) others[o.name] = true; });
+          });
+          var names = Object.keys(others);
+          if (names.length) box.appendChild(el('div', 'ack-note', 'Also off on some of these days: ' + names.join(', ') + '.' +
+            ($('ack').checked ? '' : ' Tick the box above if you know and it’s fine.')));
+        }
+        btn.disabled = !(cd.length && lbl);
+        btn.textContent = !cd.length ? 'Add time off' : !lbl ? 'Enter what it is' : 'Add ' + cd.length + ' day' + (cd.length === 1 ? '' : 's');
       } else if (state.mode === 'remove') {
         var rdays = Object.keys(state.remove).sort();
         if (rdays.length) {
@@ -361,6 +425,12 @@
       if (state.mode === 'remove') {
         if (!state.confirming) { state.confirming = true; renderSelection(); return; }
         call('apiRemoveTimeOff', [month, Object.keys(state.remove).sort()], done);
+      } else if (state.mode === 'custom') {
+        var cd = customDays();
+        call('apiRequestCustom', [month, $('customLabel').value, cd[0], cd[cd.length - 1], $('ack').checked], function (res) {
+          if (res.ok) { $('customLabel').value = ''; $('customStart').value = ''; $('customEnd').value = ''; $('ack').checked = false; }
+          done(res);
+        });
       } else if (state.mode === 'weekend') call('apiRequestWeekend', [month, state.weekend], done);
       else call('apiRequestVacation', [month, Object.keys(state.vacation).sort()], done);
     }
@@ -377,6 +447,16 @@
       });
     });
     $('submit').addEventListener('click', submit);
+    ['customLabel', 'customStart', 'customEnd', 'ack'].forEach(function (id) {
+      $(id).addEventListener(id === 'ack' ? 'change' : 'input', function () {
+        if (!state.view) return;
+        if (id === 'customStart' && (!$('customEnd').value || $('customEnd').value < $('customStart').value)) $('customEnd').value = $('customStart').value;
+        if (id === 'customStart') $('customEnd').min = $('customStart').value;
+        showStatus('', '', []);
+        renderCalendar();
+        renderSelection();
+      });
+    });
     TimeOffApi.start({ need: 'fellow', adminUrl: 'admin/', links: [{ label: 'Call schedule', href: 'https://schedule.usctransplant.life/' }],
       onReady: function () { load(''); } });
   })();
