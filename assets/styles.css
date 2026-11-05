@@ -1,5 +1,6 @@
 /*
- * Fellowship Time Off — styles for both pages (and the privacy page).
+ * The fellowship sites — time off, call schedule and portal — share these styles (keep the copies identical).
+ * Each site adds its own file for what only it uses (schedule.css, portal.css).
  *
  * The idea: the header is a pager. A USC-cardinal case with a backlit LCD screen that wakes up when the page loads
  * (the only animation that plays on its own). Everything below is quiet: pale scrub-green paper with a faint
@@ -83,6 +84,7 @@
 
 /* ── page ── */
 * { box-sizing: border-box; }
+[hidden] { display: none !important; } /* hidden always wins over a display set below */
 html { -webkit-text-size-adjust: 100%; }
 body {
   margin: 0;
@@ -165,10 +167,8 @@ h1::after { /* the pager's cursor: blinks three times, then goes away */
 /* ── layout ── */
 main { max-width: 1120px; margin: 0 auto; padding: 4px 16px 48px; }
 #auth { max-width: 520px; margin: 0 auto; padding: 8px 16px 0; }
-#auth[hidden] { display: none; }
 .col { min-width: 0; }
-main[hidden] { display: none !important; }
-/* Admin page on phones: one column in the original order (month, rule check, totals, who's off, changes, people). */
+/* Time-off admin page on phones: one column in this order (month, rule check, totals, who's off, changes, people). */
 @media (max-width: 959px) {
   main.admin:not([hidden]) { display: flex; flex-direction: column; }
   main.admin > .col { display: contents; }
@@ -249,6 +249,14 @@ select:hover, input:hover { border-color: var(--muted); }
   color: #fff; background: var(--cardinal); border-color: var(--cardinal-deep);
   box-shadow: 0 2px 0 var(--cardinal-deep), inset 0 -3px 0 var(--gold);
 }
+.tab[aria-checked="true"] { /* keys that work like radio buttons */
+  color: #fff; background: var(--cardinal); border-color: var(--cardinal-deep);
+  box-shadow: 0 2px 0 var(--cardinal-deep), inset 0 -3px 0 var(--gold);
+}
+.tab small { display: block; font-size: 12px; font-weight: 600; opacity: .85; }
+/* a group of keys, choose one: <div class="keys" style="--n:3" role="radiogroup"> */
+.keys { display: grid; grid-template-columns: repeat(var(--n, 2), minmax(0, 1fr)); gap: 6px; margin-bottom: 12px; }
+.keys .tab { font-size: 15px; }
 .tabs5 { margin-top: 14px; }
 .tabs4 { grid-template-columns: repeat(2, 1fr); }
 
@@ -352,7 +360,6 @@ button.cell.ok.sel { border-color: var(--cardinal-deep); box-shadow: 0 2px 0 var
 @keyframes slip-in { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: none; } }
 
 body.busy main { opacity: .6; pointer-events: none; transition: opacity .15s; }
-.denied p { margin: 0; }
 
 /* ── admin page ── */
 .toolbar { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 12px; }
@@ -421,32 +428,24 @@ body.busy main { opacity: .6; pointer-events: none; transition: opacity .15s; }
 .linkbtn { font: inherit; color: inherit; background: none; border: 0; padding: 0; text-decoration: underline; cursor: pointer; }
 .auth-card .linkbtn { color: var(--accent); font-weight: 700; text-decoration: none; min-height: 40px; }
 .auth-card .hint.small { margin-top: 6px; }
+.auth-card .or { display: flex; align-items: center; gap: 10px; margin: 6px 0 12px; font-size: 13px; color: var(--muted); }
+.auth-card .or::before, .auth-card .or::after { content: ''; flex: 1; border-top: 1.5px dotted var(--line-strong); }
+.code-form { display: grid; gap: 8px; text-align: left; }
+.code-form .label { margin: 0; }
+.code-form .code-step { display: grid; gap: 8px; }
+.code-form .code-step .hint { margin: 2px 0 0; }
+.code-form .primary.small { margin: 0; }
+.code-form .linkbtn { justify-self: start; min-height: 32px; font-size: 14px; }
+.code-form .status { margin: 0; }
+.signup-line { margin: 14px 0 0 !important; font-weight: 700; }
+.signup-line .toplink { color: var(--accent); }
 
-/* ── People & access (admin page) ── */
-.people-summary { cursor: pointer; list-style: none; }
-.people-summary::-webkit-details-marker { display: none; }
-.people-summary h2 { display: block; border-bottom: 0; padding-bottom: 0; margin: 0; }
-.people-summary h2::before { content: '+'; display: inline-block; width: 1.1em; color: var(--accent); }
-details[open] > .people-summary h2::before { content: '−'; }
-.people-summary .hint { display: block; margin: 4px 0 0 1.3em; }
-details[open] > .people-summary { padding-bottom: 10px; margin-bottom: 4px; border-bottom: 2px dotted var(--line-strong); }
-#peopleStatus { margin: 10px 0 0; }
-.people-h { font-size: 16px; font-weight: 800; margin: 18px 0 4px; }
-.people-list { list-style: none; margin: 6px 0 0; padding: 0; font-size: 15px; }
-.people-list li { padding: 10px 0; border-top: 1px solid var(--line); }
-.people-list li:first-child { border-top: 0; }
-.people-list b { overflow-wrap: anywhere; }
-.people-email { display: block; font-size: 14px; color: var(--muted); overflow-wrap: anywhere; }
+/* ── chips (small labels) ── */
 .chip { display: inline-block; font-size: 12px; font-weight: 800; padding: 1px 7px; border-radius: 3px; margin-left: 6px; vertical-align: 1px; }
 .chip.ok { background: var(--ok-soft); color: var(--ok); }
 .chip.bad { background: var(--err-soft); color: var(--err); }
 .chip.muted { background: var(--sheet-sunk); color: var(--muted); border: 1px solid var(--line); }
-.people-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
-.people-field { display: block; margin-bottom: 10px; }
-.people-add { margin-top: 12px; }
-.people-inline { margin-top: 8px; }
-.people-log { list-style: none; margin: 4px 0 0; padding: 0; font-size: 13px; color: var(--muted); }
-.people-log li { padding: 3px 0; }
+a.buttonlink { display: inline-flex; align-items: center; text-decoration: none; }
 
 /* ── small phones (iPhone SE and narrower) ── */
 @media (max-width: 380px) {
@@ -480,9 +479,6 @@ details[open] > .people-summary { padding-bottom: 10px; margin-bottom: 4px; bord
   .wide .cell .num { font-size: 15px; }
   .wide .cal { gap: 6px; }
   .wide .legend { grid-template-columns: repeat(3, auto); justify-content: start; }
-  .full .people-list { display: grid; grid-template-columns: 1fr 1fr; column-gap: 32px; }
-  .full .people-list li:nth-child(2) { border-top: 0; }
-  .full .people-add, .full .people-inline { max-width: 560px; }
 }
 
 /* ── privacy page ── */

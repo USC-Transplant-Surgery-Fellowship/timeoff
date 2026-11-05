@@ -10,6 +10,7 @@
   <link rel="preload" href="../assets/fonts/atkinson-hyperlegible-next.woff2" as="font" type="font/woff2" crossorigin>
   <link rel="stylesheet" href="../assets/styles.css">
   <script src="https://accounts.google.com/gsi/client" async></script>
+  <script src="../assets/ui.js"></script>
   <script src="../assets/api.js"></script>
 </head>
 <body>
@@ -51,6 +52,12 @@
       <h2>Recent changes</h2>
       <p class="hint">Everything changed through this site — by fellows and admins — newest first.</p>
       <ul class="log" id="log"></ul>
+    </section>
+
+    <section class="card" id="peopleCard">
+      <h2>People &amp; access</h2>
+      <p class="hint">Fellows, admins and viewers are managed in the portal, for all the fellowship sites at once.</p>
+      <a class="secondary buttonlink" href="https://portal.usctransplant.life/">Open the portal</a>
     </section>
     </div>
 
@@ -100,39 +107,12 @@
     </section>
     </div>
 
-    <section class="card full" id="peopleCard">
-      <details id="peopleDetails">
-        <summary class="people-summary"><h2>People &amp; access</h2><span class="hint small">Who can use the site, who are admins, and the Google Group</span></summary>
-        <div class="status" id="peopleStatus" role="status" aria-live="polite"></div>
-        <div id="people"><div class="loading">Loading…</div></div>
-      </details>
-    </section>
   </main>
 
   <script>
   (function () {
     var state = { view: null, member: '', mode: 'weekend', weekend: '', picks: {}, confirming: false, override: false, busy: false };
-    var DOW = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-    function $(id) { return document.getElementById(id); }
-    function el(tag, cls, text) {
-      var e = document.createElement(tag);
-      if (cls) e.className = cls;
-      if (text != null) e.textContent = text;
-      return e;
-    }
-    function clear(node) { while (node.firstChild) node.removeChild(node.firstChild); }
-    function addDays(key, n) {
-      var p = key.split('-').map(Number);
-      return new Date(Date.UTC(p[0], p[1] - 1, p[2] + n)).toISOString().slice(0, 10);
-    }
-    function dayLabel(key) {
-      var p = key.split('-').map(Number);
-      return DOW[new Date(Date.UTC(p[0], p[1] - 1, p[2])).getUTCDay()] + ' ' + p[1] + '/' + p[2];
-    }
-    function initials(name) {
-      return String(name).split(/\s+/).filter(Boolean).map(function (w) { return w[0]; }).join('').slice(0, 3).toUpperCase();
-    }
-    function plural(n, word) { return n + ' ' + word + (n === 1 ? '' : 's'); }
+    var $ = UI.$, el = UI.el, clear = UI.clear, addDays = UI.addDays, dayLabel = UI.dayLabel, plural = UI.plural, renderSelect = UI.fillSelect;
     function picked() { return Object.keys(state.picks).sort(); }
 
     /* ── server calls ── */
@@ -140,8 +120,8 @@
     function call(fn, args, onOk) {
       if (state.busy) return;
       state.busy = true;
-      document.body.classList.add('busy');
-      var done = function () { state.busy = false; state.confirming = false; document.body.classList.remove('busy'); };
+      UI.busy(true);
+      var done = function () { state.busy = false; state.confirming = false; UI.busy(false); };
       TimeOffApi.run(fn, args, function (res) { done(); onOk(res); if (state.view) renderSelection(); }, function (err) {
           done();
           var lines = [err && err.message ? err.message : String(err)];
@@ -172,24 +152,7 @@
       renderLog(view.log);
     }
 
-    function renderLog(log) {
-      var ul = $('log'); clear(ul);
-      (log || []).forEach(function (l) {
-        var li = el('li'); li.appendChild(document.createTextNode(l.what));
-        li.appendChild(el('span', 'when', l.at + ' · ' + l.by)); ul.appendChild(li);
-      });
-      if (!log || !log.length) ul.appendChild(el('li', 'empty', 'No changes yet. Changes made from now on show up here.'));
-    }
-
-    function renderSelect(sel, options, value) {
-      clear(sel);
-      options.forEach(function (o) {
-        var opt = el('option', null, o[1]);
-        opt.value = o[0];
-        if (o[0] === value) opt.selected = true;
-        sel.appendChild(opt);
-      });
-    }
+    function renderLog(log) { UI.fillLog($('log'), log, 'No changes yet. Changes made from now on show up here.'); }
 
     function renderTotals() {
       var t = $('totals');
@@ -273,6 +236,9 @@
 
     function renderActions() {
       var v = state.view, mode = state.mode;
+      // No time-off fellows yet (they are added in the portal): nothing to change.
+      $('makeCard').hidden = !v.member;
+      if (!v.member) return;
       Array.prototype.forEach.call(document.querySelectorAll('.tab'), function (t) {
         t.setAttribute('aria-selected', t.getAttribute('data-mode') === mode ? 'true' : 'false');
       });
@@ -335,11 +301,11 @@
       });
     }
 
-    function customDays() {
-      var a = $('customStart').value, b = $('customEnd').value || a, days = [];
-      if (!a || b < a) return days;
-      for (var k = a; k <= b && days.length < 62; k = addDays(k, 1)) days.push(k);
-      return days;
+    function customDays() { return UI.daysFrom($('customStart').value, $('customEnd').value, 62); }
+    /** How many of these days count toward the vacation days (the counted days of the week, from the rules). */
+    function countedOf(days) {
+      var dows = state.view.rules.countedDaysOfWeek || [1, 2, 3, 4, 5];
+      return days.filter(function (k) { return dows.indexOf(UI.weekday(k)) !== -1; }).length;
     }
 
     function cellAction(c) {
@@ -352,7 +318,7 @@
     function renderCalendar() {
       var cal = $('calendar');
       clear(cal);
-      DOW.forEach(function (d) { cal.appendChild(el('div', 'dow', d)); });
+      UI.DOW.forEach(function (d) { cal.appendChild(el('div', 'dow', d)); });
       var chosen = {};
       if (state.mode === 'weekend' && state.weekend) for (var i = 0; i < state.view.rules.weekendLength; i++) chosen[addDays(state.weekend, i)] = true;
       if (state.mode === 'custom') customDays().forEach(function (k) { chosen[k] = true; });
@@ -362,14 +328,14 @@
         if (action) { cell.type = 'button'; cell.classList.add('ok'); cell.addEventListener('click', action); }
         else if (['vacation', 'extra', 'remove'].indexOf(state.mode) !== -1 && c.inMonth) cell.classList.add('muted');
         if (!c.inMonth) cell.classList.add('out');
-        var dow = new Date(c.key + 'T12:00:00Z').getUTCDay();
+        var dow = UI.weekday(c.key);
         if (dow === 0 || dow === 6) cell.classList.add('weekendday');
         if (c.off.some(function (o) { return o.mine; })) cell.classList.add('mine');
         if (chosen[c.key] || (state.picks[c.key] && state.mode !== 'remove')) cell.classList.add('sel');
         if (state.picks[c.key] && state.mode === 'remove') cell.classList.add('sel', 'removing');
         cell.appendChild(el('span', 'num', String(c.day)));
         c.off.forEach(function (o) {
-          var tag = el('span', 'tag', initials(o.name));
+          var tag = el('span', 'tag', UI.initials(o.name));
           tag.title = o.name + (o.reason ? ' – ' + o.reason : '');
           cell.appendChild(tag);
         });
@@ -403,8 +369,7 @@
       } else if (mode === 'custom') {
         var cd = customDays(), lbl = $('customLabel').value.trim();
         enabled = cd.length > 0 && !!lbl;
-        text = cd.length ? '"' + name + ' - ' + (lbl || '…') + '": ' + dayLabel(cd[0]) + (cd.length > 1 ? ' – ' + dayLabel(cd[cd.length - 1]) : '') +
-          ' (' + plural(cd.filter(function (k) { var w = new Date(k + 'T12:00:00Z').getUTCDay(); return w > 0 && w < 6; }).length, 'weekday') + ' counted)' : '';
+        text = cd.length ? '"' + name + ' - ' + (lbl || '…') + '": ' + UI.spanLabel(cd[0], cd[cd.length - 1]) + ' (' + plural(countedOf(cd), 'day') + ' counted)' : '';
         label = 'Add time off';
       } else {
         enabled = days.length > 0;
@@ -417,20 +382,7 @@
       btn.classList.toggle('danger', mode === 'remove');
     }
 
-    function showStatus(kind, title, lines) {
-      var box = $('status');
-      clear(box);
-      if (!kind) return;
-      var div = el('div', 'box ' + kind);
-      div.appendChild(el('b', null, title));
-      if (lines.length) {
-        var ul = el('ul');
-        lines.forEach(function (l) { ul.appendChild(el('li', null, l)); });
-        div.appendChild(ul);
-      }
-      box.appendChild(div);
-      box.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-    }
+    function showStatus(kind, title, lines) { UI.showStatus($('status'), kind, title, lines, true); }
 
     function afterChange(title) {
       return function (res) {
@@ -466,7 +418,7 @@
       var list = $('issues');
       clear(list);
       if (!res.issues.length) list.appendChild(el('li', 'empty', 'Everything on the calendar follows the rules.'));
-      if (res.overridden) list.appendChild(el('li', 'empty', plural(res.overridden, 'overlap') + ' approved (admin override or marked as intended) ' +
+      if (res.overridden) list.appendChild(el('li', 'empty', plural(res.overridden, 'approved overlap') + ' (allowed when added, or marked as intended) ' +
         (res.overridden === 1 ? 'is' : 'are') + ' not listed.'));
       res.issues.forEach(function (i) {
         var li = el('li');
@@ -526,154 +478,12 @@
     }
 
     function showCheckStatus(kind, title, lines) {
-      var box = $('checkStatus');
-      clear(box);
-      if (!kind) return;
-      var div = el('div', 'box ' + kind);
-      div.appendChild(el('b', null, title));
-      if (lines.length) {
-        var ul = el('ul');
-        lines.forEach(function (l) { ul.appendChild(el('li', null, l)); });
-        div.appendChild(ul);
-      }
-      box.appendChild(div);
-      $('checkCard').scrollIntoView({ behavior: 'smooth', block: 'start' });
+      UI.showStatus($('checkStatus'), kind, title, lines);
+      if (kind) $('checkCard').scrollIntoView({ behavior: 'smooth', block: 'start' });
     }
 
     // After any change the rule check may be out of date, so hide it until it's run again.
     function markIssuesStale() { $('checkCard').hidden = true; }
-
-    /* ── People & access ── */
-    var people = null, peopleEdit = '', peopleLoaded = false;
-
-    function loadPeople() {
-      if (state.busy) { setTimeout(loadPeople, 300); return; }
-      call('apiAdminGetPeople', [], function (p) { people = p; peopleLoaded = true; renderPeople(); });
-    }
-
-    function changePeople(change) {
-      call('apiAdminChangePeople', [change], function (res) {
-        if (!res.ok) { showPeopleStatus('error', 'Not changed', res.errors); return; }
-        people = res.people;
-        peopleEdit = '';
-        renderPeople();
-        showPeopleStatus('ok', 'Saved', res.lines);
-        if (/fellow/.test(change.type) && state.view) {
-          // The fellow picker and totals above come from the list: refresh them.
-          if (!people.fellows.some(function (f) { return f.name === state.member; })) state.member = '';
-          load(state.view.month, false);
-        }
-      });
-    }
-
-    function showPeopleStatus(kind, title, lines) {
-      var box = $('peopleStatus');
-      clear(box);
-      if (!kind) return;
-      var div = el('div', 'box ' + kind);
-      div.appendChild(el('b', null, title));
-      if (lines.length) { var ul = el('ul'); lines.forEach(function (l) { ul.appendChild(el('li', null, l)); }); div.appendChild(ul); }
-      box.appendChild(div);
-    }
-
-    function smallButton(text, cls, fn) {
-      var b = el('button', 'secondary small ' + (cls || ''), text);
-      b.type = 'button';
-      b.addEventListener('click', fn);
-      return b;
-    }
-    // Buttons that remove someone ask twice.
-    function confirmButton(text, fn) {
-      var armed = false, b = smallButton(text, '', function () {
-        if (!armed) { armed = true; b.textContent = 'Tap again to confirm'; b.classList.add('armed'); return; }
-        fn();
-      });
-      return b;
-    }
-    function field(label, value, placeholder, type) {
-      var wrap = el('label', 'people-field');
-      wrap.appendChild(el('span', 'label', label));
-      var i = el('input');
-      i.type = type || 'text'; i.value = value || ''; i.placeholder = placeholder || ''; i.autocomplete = 'off';
-      wrap.appendChild(i);
-      return { wrap: wrap, input: i };
-    }
-
-    /* Add or edit a fellow. f = null to add. */
-    function fellowForm(f) {
-      var form = el('div', 'people-form');
-      var name = field('Name, exactly as in calendar titles', f && f.name, 'e.g. Dylan Russell');
-      var email = field('Google account email they sign in with', f && f.email, 'name@gmail.com', 'email');
-      var aliases = field('Other spellings in old calendar events (optional, comma-separated)', f && f.aliases.join(', '), 'e.g. Ellie Heidorn');
-      [name, email, aliases].forEach(function (x) { form.appendChild(x.wrap); });
-      var row = el('div', 'people-actions');
-      row.appendChild(smallButton(f ? 'Save' : 'Add fellow', 'strong', function () {
-        changePeople(f ? { type: 'edit-fellow', key: f.email, name: name.input.value, email: email.input.value, aliases: aliases.input.value }
-                       : { type: 'add-fellow', name: name.input.value, email: email.input.value, aliases: aliases.input.value });
-      }));
-      if (f) row.appendChild(smallButton('Cancel', '', function () { peopleEdit = ''; renderPeople(); }));
-      form.appendChild(row);
-      return form;
-    }
-
-    function renderPeople() {
-      var box = $('people');
-      clear(box);
-      if (!people) return;
-
-      box.appendChild(el('h3', 'people-h', 'Fellows (' + people.fellows.length + ')'));
-      var note = el('p', 'hint small', 'Fellows sign in with the email below and must also be members of the Google Group ' + people.groupEmail +
-        '. Google doesn’t let the site add or remove group members, so do that on the group’s page' + (people.groupMembersUrl ? ': ' : '.'));
-      if (people.groupMembersUrl) { var a = el('a', null, 'open the group’s members'); a.href = people.groupMembersUrl; a.target = '_blank'; a.rel = 'noopener'; note.appendChild(a); note.appendChild(document.createTextNode('.')); }
-      box.appendChild(note);
-      var list = el('ul', 'people-list');
-      people.fellows.forEach(function (f) {
-        var li = el('li');
-        if (peopleEdit === f.email) { li.appendChild(fellowForm(f)); list.appendChild(li); return; }
-        li.appendChild(el('b', null, f.name));
-        var chip = f.inGroup === true ? el('span', 'chip ok', 'In Google Group') : f.inGroup === false ? el('span', 'chip bad', 'Not in Google Group') : el('span', 'chip muted', 'Group status unknown');
-        li.appendChild(chip);
-        li.appendChild(el('span', 'people-email', f.email));
-        if (f.inGroup == null) li.appendChild(el('span', 'people-email', 'Google’s group check didn’t answer' + (f.groupError ? ' (' + f.groupError + ')' : '') + '. Usually temporary: press Sync calendar or reload in a minute.'));
-        if (f.aliases.length) li.appendChild(el('span', 'people-email', 'Also written: ' + f.aliases.join(', ')));
-        var row = el('div', 'people-actions');
-        row.appendChild(smallButton('Edit', '', function () { peopleEdit = f.email; showPeopleStatus('', '', []); renderPeople(); }));
-        row.appendChild(confirmButton('Remove', function () { changePeople({ type: 'remove-fellow', key: f.email }); }));
-        li.appendChild(row);
-        list.appendChild(li);
-      });
-      if (!people.fellows.length) list.appendChild(el('li', 'empty', 'No fellows yet.'));
-      box.appendChild(list);
-      var add = el('details', 'override people-add');
-      add.appendChild(el('summary', null, 'Add a fellow'));
-      add.appendChild(fellowForm(null));
-      box.appendChild(add);
-
-      box.appendChild(el('h3', 'people-h', 'Admins (' + people.admins.length + ')'));
-      box.appendChild(el('p', 'hint small', 'Admins can use this page. They don’t need to be fellows or in the Google Group.'));
-      var admins = el('ul', 'people-list');
-      people.admins.forEach(function (a) {
-        var li = el('li');
-        li.appendChild(el('b', null, a.email));
-        if (a.owner) li.appendChild(el('span', 'chip muted', 'Fellowship account · always an admin'));
-        if (a.you) li.appendChild(el('span', 'chip muted', 'You'));
-        if (!a.owner && !a.you) { var row = el('div', 'people-actions'); row.appendChild(confirmButton('Remove admin', function () { changePeople({ type: 'remove-admin', email: a.email }); })); li.appendChild(row); }
-        admins.appendChild(li);
-      });
-      box.appendChild(admins);
-      var addAdmin = el('div', 'people-form people-inline');
-      var adminEmail = field('Add an admin (Google account email)', '', 'name@gmail.com', 'email');
-      addAdmin.appendChild(adminEmail.wrap);
-      addAdmin.appendChild(smallButton('Add admin', 'strong', function () { changePeople({ type: 'add-admin', email: adminEmail.input.value }); }));
-      box.appendChild(addAdmin);
-
-      if (people.log.length) {
-        box.appendChild(el('h3', 'people-h', 'Recent changes'));
-        var log = el('ul', 'people-log');
-        people.log.forEach(function (x) { log.appendChild(el('li', null, x.at + ' · ' + x.by + ': ' + x.what)); });
-        box.appendChild(log);
-      }
-    }
 
     /* ── wiring ── */
     $('month').addEventListener('change', function (e) { if (!state.view) return; markIssuesStale(); load(e.target.value, false); });
@@ -708,9 +518,7 @@
       renderActions();
     });
     $('submit').addEventListener('click', submit);
-    $('peopleDetails').addEventListener('toggle', function () { if ($('peopleDetails').open && !peopleLoaded) loadPeople(); });
-    TimeOffApi.start({ need: 'admin', fellowUrl: '../', links: [{ label: 'Schedule admin', href: 'https://schedule.usctransplant.life/admin/' }],
-      onReady: function () { load('', true); } });
+    TimeOffApi.start({ app: 'timeoff', need: 'admin', mainUrl: '../', onReady: function () { load('', true); } });
   })();
   </script>
 </body>
