@@ -18,7 +18,7 @@ Google Apps Script web app (private repository: timeoff-backend)
    reads and writes the fellowship Google Calendars as the fellowship account
 ```
 
-This repository holds **only the pages**. There is no personal data here. The scheduling rules and the calendar settings are in the private `timeoff-backend` repository; who may use the site (fellows, viewers, admins) is set in the portal, https://portal.usctransplant.life. Signing in on any of the three fellowship sites (time off, call schedule, portal) signs you in on all of them.
+This repository holds **only the pages**. There is no personal data here. The scheduling rules and the calendar settings are in the private `timeoff-backend` repository; who may use the site (fellows, viewers, admins) is set in the portal, https://portal.usctransplant.life. Signing in on any of the three fellowship sites (time off, call schedule, portal) signs you in on all of them; people can sign in with Google or with a code emailed to any address, and new people sign up in the portal.
 
 | File | What it is |
 |---|---|
