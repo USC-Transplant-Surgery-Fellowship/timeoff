@@ -428,6 +428,17 @@ body.busy main { opacity: .6; pointer-events: none; transition: opacity .15s; }
 .linkbtn { font: inherit; color: inherit; background: none; border: 0; padding: 0; text-decoration: underline; cursor: pointer; }
 .auth-card .linkbtn { color: var(--accent); font-weight: 700; text-decoration: none; min-height: 40px; }
 .auth-card .hint.small { margin-top: 6px; }
+.auth-card .or { display: flex; align-items: center; gap: 10px; margin: 6px 0 12px; font-size: 13px; color: var(--muted); }
+.auth-card .or::before, .auth-card .or::after { content: ''; flex: 1; border-top: 1.5px dotted var(--line-strong); }
+.code-form { display: grid; gap: 8px; text-align: left; }
+.code-form .label { margin: 0; }
+.code-form .code-step { display: grid; gap: 8px; }
+.code-form .code-step .hint { margin: 2px 0 0; }
+.code-form .primary.small { margin: 0; }
+.code-form .linkbtn { justify-self: start; min-height: 32px; font-size: 14px; }
+.code-form .status { margin: 0; }
+.signup-line { margin: 14px 0 0 !important; font-weight: 700; }
+.signup-line .toplink { color: var(--accent); }
 
 /* ── chips (small labels) ── */
 .chip { display: inline-block; font-size: 12px; font-weight: 800; padding: 1px 7px; border-radius: 3px; margin-left: 6px; vertical-align: 1px; }

@@ -1,12 +1,18 @@
 /*
- * Shared by all three sites (time off, call schedule, portal; keep the copies identical): settings, "Sign in with
- * Google", one sign-in for all the sites, and calls to the server (Google Apps Script).
+ * Shared by all three sites (time off, call schedule, portal; keep the copies identical): settings, signing in
+ * ("Sign in with Google", or a code emailed to any address), one sign-in for all the sites, and calls to the server
+ * (Google Apps Script).
  *
  * SETTINGS — change these if the Apps Script deployment, the Google sign-in client or the portal's address changes:
  *   API_URL:   the Apps Script web app URL (Deploy → Manage deployments → Web app URL, ends in /exec)
  *   CLIENT_ID: the OAuth "Web application" client ID from Google Cloud (must match TO_API.CLIENT_ID in api.gs)
  *   HUB_URL:   the portal's session.html, which remembers the sign-in for all the sites (see below)
- * A page can use other values (e.g. for testing) by setting window.SITE_API_URL / window.SITE_HUB_URL before this file loads.
+ *   SIGNUP_URL: the portal's sign-up page, for people who aren't on the member list yet
+ * A page can use other values (e.g. for testing) by setting window.SITE_API_URL / SITE_HUB_URL / SITE_SIGNUP_URL before this file loads.
+ *
+ * Signing in: with Google, or by asking for a 6-digit code at any email address and typing it in (the server checks it
+ * and gives a sign-in that lasts days rather than an hour). Either way, the member list in the portal decides what
+ * someone may do. People who aren't on it are pointed to the sign-up page, or told their sign-up is waiting for approval.
  *
  * One sign-in for all the sites: after someone signs in on any site, the token is kept by the portal's session.html
  * (opened invisibly in each page), so the other sites use it too instead of asking again. Signing out on one site
@@ -15,7 +21,7 @@
  *
  * Each page calls TimeOffApi.start({ app, need, onReady, mainUrl?, adminUrl? }) and then TimeOffApi.run(fn, args, onOk, onFail).
  *   app:  'timeoff' | 'schedule' | 'portal' — whose roles count (set in the portal).
- *   need: 'viewer' (anyone with a role in the app) | 'admin'.
+ *   need: 'viewer' (anyone with a role in the app) | 'admin' | 'any' (anyone signed in, e.g. the sign-up page).
  *   mainUrl / adminUrl: this site's other page, linked in the header for people who can use it.
  * The page needs these elements: #who (in the header), #auth (sign-in / messages), #app (the page itself, hidden at first).
  */
@@ -24,7 +30,9 @@
     API_URL: window.SITE_API_URL || 'https://script.google.com/macros/s/AKfycbzyKKmoG8PJAqDHuNzXEINMw3gUfY-ctND7aSqzrDCV0l6P8C_SYY6VmU3IzIcYFb76/exec',
     CLIENT_ID: '72967386715-cgntqve43vc2ptpkhprgalf714vtke38.apps.googleusercontent.com',
     HUB_URL: window.SITE_HUB_URL != null ? window.SITE_HUB_URL : 'https://portal.usctransplant.life/session.html',
+    SIGNUP_URL: window.SITE_SIGNUP_URL || 'https://portal.usctransplant.life/signup.html',
   };
+  var EMAIL_KEY = 'fellowship.lastEmail'; // remembered so the email box is filled in next time
   var TOKEN_KEY = 'timeoff.idToken';
   var opts = null, gisReady = false;
 
@@ -98,7 +106,7 @@
     var box = $('auth'); clear(box); box.hidden = false;
     var c = el('section', 'card auth-card');
     if (title) c.appendChild(el('h2', null, title));
-    (lines || []).forEach(function (l) { c.appendChild(typeof l === 'string' ? el('p', null, l) : l); });
+    (lines || []).forEach(function (l) { if (l) c.appendChild(typeof l === 'string' ? el('p', null, l) : l); });
     box.appendChild(c);
     return c;
   }
@@ -124,12 +132,67 @@
     showApp(false);
     $('who').textContent = '';
     var btn = el('div', 'gsi-button');
-    card('Sign in', [message || 'Sign in with the Google account on the fellowship’s member list.', btn,
+    var signupPage = opts && opts.need === 'any';
+    card('Sign in', [message || (signupPage ? 'Sign in with Google, or with a code we email you.' : 'Sign in with the Google account or email on the fellowship’s member list.'), btn,
+      el('div', 'or', 'or'), codeForm(),
+      signupLine(),
       el('p', 'hint small', 'One sign-in works for the time-off site, the call schedule and the portal.')]);
     whenGis(function () {
       google.accounts.id.renderButton(btn, { theme: 'outline', size: 'large', text: 'signin_with', shape: 'pill' });
       google.accounts.id.prompt();
     });
+  }
+  function signupLine() {
+    var p = el('p', 'small signup-line', 'New here? ');
+    if (opts && opts.need === 'any') return null; // already on the sign-up page
+    p.appendChild(link('Sign up', CONFIG.SIGNUP_URL));
+    return p;
+  }
+
+  /* "Email me a code": any email address works; the code proves it's theirs. */
+  function codeForm() {
+    var box = el('div', 'code-form'), last = '';
+    try { last = localStorage.getItem(EMAIL_KEY) || ''; } catch (e) { last = ''; }
+    var emailLabel = el('label', 'label', 'Or get a sign-in code by email');
+    var email = el('input'); email.type = 'email'; email.id = 'codeEmail'; email.autocomplete = 'email'; email.placeholder = 'name@example.com'; email.value = last;
+    emailLabel.htmlFor = 'codeEmail';
+    var send = el('button', 'secondary', 'Email me a code'); send.type = 'button';
+    var step2 = el('div', 'code-step'); step2.hidden = true;
+    var sentNote = el('p', 'hint small');
+    var codeLabel = el('label', 'label', '6-digit code'); codeLabel.htmlFor = 'codeValue';
+    var code = el('input'); code.id = 'codeValue'; code.type = 'text'; code.inputMode = 'numeric'; code.autocomplete = 'one-time-code'; code.maxLength = 7; code.placeholder = '123456';
+    var go = el('button', 'primary small', 'Sign in'); go.type = 'button';
+    var again = linkButton('Use a different email or send a new code', function () { step2.hidden = true; status(''); email.focus(); });
+    var msg = el('div', 'status');
+    function status(kind, text) { clear(msg); if (kind) { var b = el('div', 'box ' + kind); b.textContent = text; msg.appendChild(b); } }
+    function busy(b, on) { b.disabled = on; }
+    send.addEventListener('click', function () {
+      var e = email.value.trim();
+      if (!e) { status('error', 'Enter your email address.'); return; }
+      busy(send, true); status('');
+      callPublic('apiAuthSendCode', [e]).then(function (r) {
+        busy(send, false);
+        if (!r.ok) { status('error', r.errors.join(' ')); return; }
+        try { localStorage.setItem(EMAIL_KEY, e); } catch (x) { /* private mode */ }
+        sentNote.textContent = r.message; step2.hidden = false; code.value = ''; code.focus();
+      }, function (err) { busy(send, false); status('error', err.message); });
+    });
+    function check() {
+      var e = email.value.trim(), c = code.value.replace(/\D/g, '');
+      if (c.length !== 6) { status('error', 'Enter the 6 digits from the email.'); return; }
+      busy(go, true); status('');
+      callPublic('apiAuthCheckCode', [e, c]).then(function (r) {
+        busy(go, false);
+        if (!r.ok) { status('error', r.errors.join(' ')); return; }
+        setToken(r.token); checkWho();
+      }, function (err) { busy(go, false); status('error', err.message); });
+    }
+    go.addEventListener('click', check);
+    code.addEventListener('keydown', function (ev) { if (ev.key === 'Enter') check(); });
+    email.addEventListener('keydown', function (ev) { if (ev.key === 'Enter') send.click(); });
+    step2.appendChild(sentNote); step2.appendChild(codeLabel); step2.appendChild(code); step2.appendChild(go); step2.appendChild(again);
+    [emailLabel, email, send, step2, msg].forEach(function (x) { box.appendChild(x); });
+    return box;
   }
   function signOut() {
     setToken('');
@@ -141,7 +204,16 @@
   function checkWho() {
     card('', [el('div', 'loading', 'Checking your access…')]);
     call('apiWhoAmI', [opts.app]).then(function (who) {
-      var allowed = opts.need === 'admin' ? who.isAdmin : who.canView;
+      var allowed = opts.need === 'any' || (opts.need === 'admin' ? who.isAdmin : who.canView);
+      if (!allowed && who.status === 'pending') {
+        card('Waiting for approval', [who.message, linkButton('Sign in with a different account', signOut)]);
+        return;
+      }
+      if (!allowed && who.status === 'unknown') {
+        card('You’re not on the member list yet', [who.message, link('Sign up', CONFIG.SIGNUP_URL), el('br'),
+          linkButton('Sign in with a different account', signOut)]);
+        return;
+      }
       if (!allowed) {
         var lines = [opts.need === 'admin' && who.canView ? who.email + ' is not an admin here.' : who.message];
         if (opts.need === 'admin' && who.canView && opts.mainUrl) lines.push(link('Open the main page', opts.mainUrl));
@@ -175,6 +247,26 @@
   }
 
   /* ── calling the server ── */
+  function post(body) {
+    return fetch(CONFIG.API_URL, {
+      method: 'POST',
+      // text/plain keeps this a "simple" request, which Apps Script accepts from another site.
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      body: JSON.stringify(body),
+    }).then(function (r) {
+      if (!r.ok) throw new Error('The server answered with an error (' + r.status + '). Please try again.');
+      return r.json();
+    }, function () {
+      throw new Error('Could not reach the server. Check your internet connection and try again.');
+    });
+  }
+  /** The two calls that work before signing in (asking for and checking an emailed code). */
+  function callPublic(fn, args) {
+    return post({ fn: fn, args: args || [] }).then(function (res) {
+      if (res.ok) return res.result;
+      throw Object.assign(new Error(res.error || 'Something went wrong.'), { code: res.code });
+    });
+  }
   function authError(message) {
     showSignIn(message);
     return Object.assign(new Error(message), { code: 'auth' });
@@ -183,17 +275,7 @@
     var local = localToken();
     return (local ? Promise.resolve(local) : getToken()).then(function (token) {
       if (!token) throw authError('Your sign-in has expired. Please sign in again.');
-      return fetch(CONFIG.API_URL, {
-        method: 'POST',
-        // text/plain keeps this a "simple" request, which Apps Script accepts from another site.
-        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-        body: JSON.stringify({ fn: fn, args: args || [], idToken: token }),
-      }).then(function (r) {
-        if (!r.ok) throw new Error('The server answered with an error (' + r.status + '). Please try again.');
-        return r.json();
-      }, function () {
-        throw new Error('Could not reach the server. Check your internet connection and try again.');
-      }).then(function (res) {
+      return post({ fn: fn, args: args || [], idToken: token }).then(function (res) {
         if (res.ok) return res.result;
         if (res.code === 'auth') { setToken(''); throw authError(res.error); }
         throw Object.assign(new Error(res.error || 'Something went wrong.'), { code: res.code });
@@ -203,7 +285,7 @@
 
   window.TimeOffApi = {
     config: CONFIG,
-    /** opts: { app: 'timeoff' | 'schedule' | 'portal', need: 'viewer' | 'admin', onReady(who), mainUrl?, adminUrl? } */
+    /** opts: { app: 'timeoff' | 'schedule' | 'portal', need: 'viewer' | 'admin' | 'any', onReady(who), mainUrl?, adminUrl? } */
     start: function (o) {
       opts = o;
       card('', [el('div', 'loading', 'Signing in…')]);
