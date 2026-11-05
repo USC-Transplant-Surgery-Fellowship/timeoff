@@ -1,16 +1,19 @@
 /*
- * Time-off site: settings, "Sign in with Google", and calls to the server (Google Apps Script).
+ * Shared by both sites (time-off and schedule; keep the two copies identical): settings, "Sign in with Google",
+ * and calls to the server (Google Apps Script).
  *
  * SETTINGS — change these if the Apps Script deployment or the Google sign-in client ever changes:
  *   API_URL:   the Apps Script web app URL (Deploy → Manage deployments → Web app URL, ends in /exec)
  *   CLIENT_ID: the OAuth "Web application" client ID from Google Cloud (must match TO_API.CLIENT_ID in timeOffApi.gs)
  *
- * Each page calls TimeOffApi.start({ need: 'fellow' | 'admin', onReady }) and then TimeOffApi.run(fn, args, onOk, onFail).
+ * Each page calls TimeOffApi.start({ need: 'fellow' | 'admin' | 'member', onReady }) and then TimeOffApi.run(fn, args, onOk, onFail).
+ *   need 'member': any fellow or admin may use the page.
+ * A page can point at another server deployment (e.g. for testing) by setting window.SITE_API_URL before this file loads.
  * The page needs these elements: #who (in the header), #auth (sign-in / messages), #app (the page itself, hidden at first).
  */
 (function () {
   var CONFIG = {
-    API_URL: 'https://script.google.com/macros/s/AKfycbzyKKmoG8PJAqDHuNzXEINMw3gUfY-ctND7aSqzrDCV0l6P8C_SYY6VmU3IzIcYFb76/exec',
+    API_URL: window.SITE_API_URL || 'https://script.google.com/macros/s/AKfycbzyKKmoG8PJAqDHuNzXEINMw3gUfY-ctND7aSqzrDCV0l6P8C_SYY6VmU3IzIcYFb76/exec',
     CLIENT_ID: '72967386715-cgntqve43vc2ptpkhprgalf714vtke38.apps.googleusercontent.com',
   };
   var TOKEN_KEY = 'timeoff.idToken';
@@ -85,7 +88,7 @@
   function checkWho() {
     card('', [el('div', 'loading', 'Checking your access…')]);
     call('apiWhoAmI', []).then(function (who) {
-      var allowed = opts.need === 'admin' ? who.isAdmin : who.isFellow;
+      var allowed = opts.need === 'admin' ? who.isAdmin : opts.need === 'member' ? (who.isFellow || who.isAdmin) : who.isFellow;
       if (!allowed && opts.need === 'fellow' && who.isAdmin && opts.adminUrl) { location.href = opts.adminUrl; return; }
       if (!allowed) {
         card(opts.need === 'admin' ? 'You can’t use the admin page' : 'You can’t use this site', [
@@ -95,8 +98,12 @@
       }
       // "Signed in as …", then the pager's buttons: the other view (for people who are both fellow and admin) and Sign out.
       var w = $('who'); clear(w);
-      w.appendChild(el('span', 'who-name', 'Signed in as ' + (opts.need === 'admin' ? who.email : who.name)));
+      w.appendChild(el('span', 'who-name', 'Signed in as ' + (opts.need === 'admin' || !who.name ? who.email : who.name)));
       var actions = el('span', 'who-actions');
+      (opts.links || []).forEach(function (l) {
+        if (l.adminOnly && !who.isAdmin) return;
+        var x = el('a', 'toplink', l.label); x.href = l.href; actions.appendChild(x);
+      });
       if (opts.need === 'fellow' && who.isAdmin && opts.adminUrl) { var a = el('a', 'toplink', 'Admin view'); a.href = opts.adminUrl; actions.appendChild(a); }
       if (opts.need === 'admin' && who.isFellow && opts.fellowUrl) { var f = el('a', 'toplink', 'Fellow view'); f.href = opts.fellowUrl; actions.appendChild(f); }
       actions.appendChild(linkButton('Sign out', signOut));
@@ -134,7 +141,7 @@
 
   window.TimeOffApi = {
     config: CONFIG,
-    /** opts: { need: 'fellow' | 'admin', onReady(who), adminUrl?, fellowUrl? } */
+    /** opts: { need: 'fellow' | 'admin' | 'member', onReady(who), adminUrl?, fellowUrl?, links?: [{ label, href, adminOnly? }] } */
     start: function (o) {
       opts = o;
       if (getToken()) checkWho(); else showSignIn();
