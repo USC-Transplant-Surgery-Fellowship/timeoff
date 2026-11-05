@@ -46,6 +46,12 @@
       <h2 id="offTitle">Already off</h2>
       <ul class="offlist" id="offList"></ul>
     </section>
+
+    <section class="card" id="logCard">
+      <h2>Recent changes</h2>
+      <p class="hint">Everything changed through this site — by fellows and admins — newest first.</p>
+      <ul class="log" id="log"></ul>
+    </section>
     </div>
 
     <div class="col wide">
@@ -163,6 +169,16 @@
       renderTotals();
       renderOffList();
       renderActions();
+      renderLog(view.log);
+    }
+
+    function renderLog(log) {
+      var ul = $('log'); clear(ul);
+      (log || []).forEach(function (l) {
+        var li = el('li'); li.appendChild(document.createTextNode(l.what));
+        li.appendChild(el('span', 'when', l.at + ' · ' + l.by)); ul.appendChild(li);
+      });
+      if (!log || !log.length) ul.appendChild(el('li', 'empty', 'No changes yet. Changes made from now on show up here.'));
     }
 
     function renderSelect(sel, options, value) {
@@ -693,7 +709,8 @@
     });
     $('submit').addEventListener('click', submit);
     $('peopleDetails').addEventListener('toggle', function () { if ($('peopleDetails').open && !peopleLoaded) loadPeople(); });
-    TimeOffApi.start({ need: 'admin', fellowUrl: '../', onReady: function () { load('', true); } });
+    TimeOffApi.start({ need: 'admin', fellowUrl: '../', links: [{ label: 'Schedule admin', href: 'https://schedule.usctransplant.life/admin/' }],
+      onReady: function () { load('', true); } });
   })();
   </script>
 </body>
