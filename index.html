@@ -143,7 +143,7 @@
       box.hidden = !t;
       $('viewerNote').hidden = !!t;
       if (!t) return;
-      box.appendChild(el('div', 'tally-head', 'Your vacation days, ' + t.yearLabel + ' (includes conferences and other non-weekend time off)'));
+      box.appendChild(el('div', 'tally-head', 'Your vacation days (includes conferences and other non-weekend time off)'));
       box.appendChild(UI.tallyStats(t));
     }
 
@@ -321,7 +321,7 @@
       } else {
         var count = Object.keys(state.vacation).length;
         if (count >= state.view.tally.remaining) {
-          showStatus('error', 'Vacation limit', ['You have ' + plural(state.view.tally.remaining, 'vacation day') + ' left for ' + state.view.tally.yearLabel + '.']);
+          showStatus('error', 'Vacation limit', ['You have ' + plural(state.view.tally.remaining, 'vacation day') + ' left.']);
           return;
         }
         state.vacation[key] = true;
