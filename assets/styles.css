@@ -218,3 +218,34 @@ body.busy main { opacity: .6; pointer-events: none; }
 .linkbtn { font: inherit; color: inherit; background: none; border: 0; padding: 0; text-decoration: underline; cursor: pointer; }
 .auth-card .linkbtn { color: var(--cardinal); font-weight: 600; text-decoration: none; }
 .who .linkbtn { color: #fff; }
+
+/* People & access (admin page) */
+.people-summary { cursor: pointer; list-style: none; }
+.people-summary::-webkit-details-marker { display: none; }
+.people-summary h2 { display: inline; margin: 0 8px 0 0; }
+.people-summary h2::before { content: '▸ '; color: var(--muted); }
+details[open] > .people-summary h2::before { content: '▾ '; }
+.people-summary .hint { display: block; margin-top: 4px; }
+#peopleStatus { margin: 10px 0 0; }
+.people-h { font-size: 15px; margin: 16px 0 4px; }
+.people-list { list-style: none; margin: 6px 0 0; padding: 0; font-size: 14px; }
+.people-list li { padding: 8px 0; border-top: 1px solid var(--line); }
+.people-list li:first-child { border-top: 0; }
+.people-email { display: block; font-size: 13px; color: var(--muted); overflow-wrap: anywhere; }
+.chip { display: inline-block; font-size: 11px; font-weight: 600; padding: 1px 6px; border-radius: 4px; margin-left: 6px; vertical-align: 1px; }
+.chip.ok { background: var(--ok-soft); color: var(--ok); }
+.chip.bad { background: var(--err-soft); color: var(--err); }
+.chip.muted { background: var(--bg); color: var(--muted); }
+.people-actions { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
+.people-actions .secondary.small, .people-inline .secondary.small { padding: 6px 12px; font-size: 13px; }
+.secondary.strong { background: var(--cardinal); color: #fff; }
+.secondary.armed { background: var(--err); border-color: var(--err); color: #fff; }
+.people-field { display: block; margin-bottom: 8px; }
+.people-field input {
+  width: 100%; font: inherit; padding: 9px 10px; border-radius: 10px;
+  border: 1px solid var(--line); background: var(--card); color: var(--ink);
+}
+.people-add { margin-top: 10px; }
+.people-inline { margin-top: 8px; }
+.people-log { list-style: none; margin: 4px 0 0; padding: 0; font-size: 12px; color: var(--muted); }
+.people-log li { padding: 3px 0; }
