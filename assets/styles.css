@@ -215,8 +215,9 @@ body.busy main { opacity: .6; pointer-events: none; }
 .denied p { margin: 0; }
 
 /* sign-in and account line */
+.auth-card { text-align: center; padding: 22px 16px 18px; }
 .auth-card p { margin: 0 0 10px; }
-.auth-card .gsi-button { min-height: 44px; margin: 6px 0 4px; }
+.auth-card .gsi-button { min-height: 44px; margin: 10px 0 8px; display: flex; justify-content: center; }
 .linkbtn { font: inherit; color: inherit; background: none; border: 0; padding: 0; text-decoration: underline; cursor: pointer; }
 .auth-card .linkbtn { color: var(--cardinal); font-weight: 600; text-decoration: none; }
 .who .linkbtn { color: #fff; }
@@ -251,3 +252,14 @@ details[open] > .people-summary h2::before { content: '▾ '; }
 .people-inline { margin-top: 8px; }
 .people-log { list-style: none; margin: 4px 0 0; padding: 0; font-size: 12px; color: var(--muted); }
 .people-log li { padding: 3px 0; }
+
+/* ── phones ── */
+/* Long emails wrap instead of making the page scroll sideways. */
+.people-list b { overflow-wrap: anywhere; }
+/* The pickers in Check rules fixes may shrink on very narrow screens (their longest option set their width). */
+.issues .fix { min-width: 0; }
+.issues .fix select { min-width: 0; max-width: 100%; }
+/* Header links (Admin view, Sign out): a taller tap area, same look. */
+.who a, .who .linkbtn { display: inline-block; padding: 8px 0; margin: -8px 0; }
+/* iPhones zoom in when a menu or text box with text under 16px is tapped, and stay zoomed. */
+@media (max-width: 700px) { select, input, textarea { font-size: 16px !important; } }
