@@ -84,6 +84,14 @@
       <button class="primary" id="submit" type="button" disabled>Submit</button>
       <div class="status" id="status" role="status" aria-live="polite"></div>
     </section>
+
+    <section class="card">
+      <details id="peopleDetails">
+        <summary class="people-summary"><h2>People &amp; access</h2><span class="hint small">Who can use the site, who are admins, and the Google Group</span></summary>
+        <div class="status" id="peopleStatus" role="status" aria-live="polite"></div>
+        <div id="people"><div class="loading">Loading…</div></div>
+      </details>
+    </section>
   </main>
 
   <script>
@@ -510,6 +518,137 @@
     // After any change the rule check may be out of date, so hide it until it's run again.
     function markIssuesStale() { $('checkCard').hidden = true; }
 
+    /* ── People & access ── */
+    var people = null, peopleEdit = '', peopleLoaded = false;
+
+    function loadPeople() {
+      if (state.busy) { setTimeout(loadPeople, 300); return; }
+      call('apiAdminGetPeople', [], function (p) { people = p; peopleLoaded = true; renderPeople(); });
+    }
+
+    function changePeople(change) {
+      call('apiAdminChangePeople', [change], function (res) {
+        if (!res.ok) { showPeopleStatus('error', 'Not changed', res.errors); return; }
+        people = res.people;
+        peopleEdit = '';
+        renderPeople();
+        showPeopleStatus('ok', 'Saved', res.lines);
+        if (/fellow/.test(change.type) && state.view) {
+          // The fellow picker and totals above come from the list: refresh them.
+          if (!people.fellows.some(function (f) { return f.name === state.member; })) state.member = '';
+          load(state.view.month, false);
+        }
+      });
+    }
+
+    function showPeopleStatus(kind, title, lines) {
+      var box = $('peopleStatus');
+      clear(box);
+      if (!kind) return;
+      var div = el('div', 'box ' + kind);
+      div.appendChild(el('b', null, title));
+      if (lines.length) { var ul = el('ul'); lines.forEach(function (l) { ul.appendChild(el('li', null, l)); }); div.appendChild(ul); }
+      box.appendChild(div);
+    }
+
+    function smallButton(text, cls, fn) {
+      var b = el('button', 'secondary small ' + (cls || ''), text);
+      b.type = 'button';
+      b.addEventListener('click', fn);
+      return b;
+    }
+    // Buttons that remove someone ask twice.
+    function confirmButton(text, fn) {
+      var armed = false, b = smallButton(text, '', function () {
+        if (!armed) { armed = true; b.textContent = 'Tap again to confirm'; b.classList.add('armed'); return; }
+        fn();
+      });
+      return b;
+    }
+    function field(label, value, placeholder, type) {
+      var wrap = el('label', 'people-field');
+      wrap.appendChild(el('span', 'label', label));
+      var i = el('input');
+      i.type = type || 'text'; i.value = value || ''; i.placeholder = placeholder || ''; i.autocomplete = 'off';
+      wrap.appendChild(i);
+      return { wrap: wrap, input: i };
+    }
+
+    /* Add or edit a fellow. f = null to add. */
+    function fellowForm(f) {
+      var form = el('div', 'people-form');
+      var name = field('Name, exactly as in calendar titles', f && f.name, 'e.g. Dylan Russell');
+      var email = field('Google account email they sign in with', f && f.email, 'name@gmail.com', 'email');
+      var aliases = field('Other spellings in old calendar events (optional, comma-separated)', f && f.aliases.join(', '), 'e.g. Ellie Heidorn');
+      [name, email, aliases].forEach(function (x) { form.appendChild(x.wrap); });
+      var row = el('div', 'people-actions');
+      row.appendChild(smallButton(f ? 'Save' : 'Add fellow', 'strong', function () {
+        changePeople(f ? { type: 'edit-fellow', key: f.email, name: name.input.value, email: email.input.value, aliases: aliases.input.value }
+                       : { type: 'add-fellow', name: name.input.value, email: email.input.value, aliases: aliases.input.value });
+      }));
+      if (f) row.appendChild(smallButton('Cancel', '', function () { peopleEdit = ''; renderPeople(); }));
+      form.appendChild(row);
+      return form;
+    }
+
+    function renderPeople() {
+      var box = $('people');
+      clear(box);
+      if (!people) return;
+
+      box.appendChild(el('h3', 'people-h', 'Fellows (' + people.fellows.length + ')'));
+      var note = el('p', 'hint small', 'Fellows sign in with the email below and must also be members of the Google Group ' + people.groupEmail +
+        '. Google doesn’t let the site add or remove group members, so do that on the group’s page' + (people.groupMembersUrl ? ': ' : '.'));
+      if (people.groupMembersUrl) { var a = el('a', null, 'open the group’s members'); a.href = people.groupMembersUrl; a.target = '_blank'; a.rel = 'noopener'; note.appendChild(a); note.appendChild(document.createTextNode('.')); }
+      box.appendChild(note);
+      var list = el('ul', 'people-list');
+      people.fellows.forEach(function (f) {
+        var li = el('li');
+        if (peopleEdit === f.email) { li.appendChild(fellowForm(f)); list.appendChild(li); return; }
+        li.appendChild(el('b', null, f.name));
+        var chip = f.inGroup === true ? el('span', 'chip ok', 'In Google Group') : f.inGroup === false ? el('span', 'chip bad', 'Not in Google Group') : el('span', 'chip muted', 'Group status unknown');
+        li.appendChild(chip);
+        li.appendChild(el('span', 'people-email', f.email));
+        if (f.aliases.length) li.appendChild(el('span', 'people-email', 'Also written: ' + f.aliases.join(', ')));
+        var row = el('div', 'people-actions');
+        row.appendChild(smallButton('Edit', '', function () { peopleEdit = f.email; showPeopleStatus('', '', []); renderPeople(); }));
+        row.appendChild(confirmButton('Remove', function () { changePeople({ type: 'remove-fellow', key: f.email }); }));
+        li.appendChild(row);
+        list.appendChild(li);
+      });
+      if (!people.fellows.length) list.appendChild(el('li', 'empty', 'No fellows yet.'));
+      box.appendChild(list);
+      var add = el('details', 'override people-add');
+      add.appendChild(el('summary', null, 'Add a fellow'));
+      add.appendChild(fellowForm(null));
+      box.appendChild(add);
+
+      box.appendChild(el('h3', 'people-h', 'Admins (' + people.admins.length + ')'));
+      box.appendChild(el('p', 'hint small', 'Admins can use this page. They don’t need to be fellows or in the Google Group.'));
+      var admins = el('ul', 'people-list');
+      people.admins.forEach(function (a) {
+        var li = el('li');
+        li.appendChild(el('b', null, a.email));
+        if (a.owner) li.appendChild(el('span', 'chip muted', 'Fellowship account · always an admin'));
+        if (a.you) li.appendChild(el('span', 'chip muted', 'You'));
+        if (!a.owner && !a.you) { var row = el('div', 'people-actions'); row.appendChild(confirmButton('Remove admin', function () { changePeople({ type: 'remove-admin', email: a.email }); })); li.appendChild(row); }
+        admins.appendChild(li);
+      });
+      box.appendChild(admins);
+      var addAdmin = el('div', 'people-form people-inline');
+      var adminEmail = field('Add an admin (Google account email)', '', 'name@gmail.com', 'email');
+      addAdmin.appendChild(adminEmail.wrap);
+      addAdmin.appendChild(smallButton('Add admin', 'strong', function () { changePeople({ type: 'add-admin', email: adminEmail.input.value }); }));
+      box.appendChild(addAdmin);
+
+      if (people.log.length) {
+        box.appendChild(el('h3', 'people-h', 'Recent changes'));
+        var log = el('ul', 'people-log');
+        people.log.forEach(function (x) { log.appendChild(el('li', null, x.at + ' · ' + x.by + ': ' + x.what)); });
+        box.appendChild(log);
+      }
+    }
+
     /* ── wiring ── */
     $('month').addEventListener('change', function (e) { if (!state.view) return; markIssuesStale(); load(e.target.value, false); });
     $('member').addEventListener('change', function (e) { if (!state.view) return; state.member = e.target.value; load(state.view.month, false); });
@@ -543,6 +682,7 @@
       renderActions();
     });
     $('submit').addEventListener('click', submit);
+    $('peopleDetails').addEventListener('toggle', function () { if ($('peopleDetails').open && !peopleLoaded) loadPeople(); });
     TimeOffApi.start({ need: 'admin', fellowUrl: '../', onReady: function () { load('', true); } });
   })();
   </script>
