@@ -377,7 +377,8 @@
       });
     });
     $('submit').addEventListener('click', submit);
-    TimeOffApi.start({ need: 'fellow', adminUrl: 'admin/', onReady: function () { load(''); } });
+    TimeOffApi.start({ need: 'fellow', adminUrl: 'admin/', links: [{ label: 'Call schedule', href: 'https://schedule.usctransplant.life/' }],
+      onReady: function () { load(''); } });
   })();
   </script>
 </body>
