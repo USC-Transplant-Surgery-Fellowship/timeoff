@@ -609,6 +609,7 @@
         var chip = f.inGroup === true ? el('span', 'chip ok', 'In Google Group') : f.inGroup === false ? el('span', 'chip bad', 'Not in Google Group') : el('span', 'chip muted', 'Group status unknown');
         li.appendChild(chip);
         li.appendChild(el('span', 'people-email', f.email));
+        if (f.inGroup == null) li.appendChild(el('span', 'people-email', 'Google’s group check didn’t answer' + (f.groupError ? ' (' + f.groupError + ')' : '') + '. Usually temporary: press Sync calendar or reload in a minute.'));
         if (f.aliases.length) li.appendChild(el('span', 'people-email', 'Also written: ' + f.aliases.join(', ')));
         var row = el('div', 'people-actions');
         row.appendChild(smallButton('Edit', '', function () { peopleEdit = f.email; showPeopleStatus('', '', []); renderPeople(); }));
