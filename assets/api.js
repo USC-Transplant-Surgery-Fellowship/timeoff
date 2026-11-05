@@ -133,10 +133,9 @@
     $('who').textContent = '';
     var btn = el('div', 'gsi-button');
     var signupPage = opts && opts.need === 'any';
-    card('Sign in', [message || (signupPage ? 'Sign in with Google, or with a code we email you.' : 'Sign in with the Google account or email on the fellowship’s member list.'), btn,
+    card('Sign in', [message || (signupPage ? 'Sign in with Google, or with a code we email you.' : null), btn,
       el('div', 'or', 'or'), codeForm(),
-      signupLine(),
-      el('p', 'hint small', 'One sign-in works for the time-off site, the call schedule and the portal.')]);
+      signupLine()]);
     whenGis(function () {
       google.accounts.id.renderButton(btn, { theme: 'outline', size: 'large', text: 'signin_with', shape: 'pill' });
       google.accounts.id.prompt();
@@ -153,9 +152,8 @@
   function codeForm() {
     var box = el('div', 'code-form'), last = '';
     try { last = localStorage.getItem(EMAIL_KEY) || ''; } catch (e) { last = ''; }
-    var emailLabel = el('label', 'label', 'Or get a sign-in code by email');
     var email = el('input'); email.type = 'email'; email.id = 'codeEmail'; email.autocomplete = 'email'; email.placeholder = 'name@example.com'; email.value = last;
-    emailLabel.htmlFor = 'codeEmail';
+    email.setAttribute('aria-label', 'Email address for a sign-in code');
     var send = el('button', 'secondary', 'Email me a code'); send.type = 'button';
     var step2 = el('div', 'code-step'); step2.hidden = true;
     var sentNote = el('p', 'hint small');
@@ -191,7 +189,7 @@
     code.addEventListener('keydown', function (ev) { if (ev.key === 'Enter') check(); });
     email.addEventListener('keydown', function (ev) { if (ev.key === 'Enter') send.click(); });
     step2.appendChild(sentNote); step2.appendChild(codeLabel); step2.appendChild(code); step2.appendChild(go); step2.appendChild(again);
-    [emailLabel, email, send, step2, msg].forEach(function (x) { box.appendChild(x); });
+    [email, send, step2, msg].forEach(function (x) { box.appendChild(x); });
     return box;
   }
   function signOut() {
