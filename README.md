@@ -70,7 +70,7 @@ The server repository's settings check also compares them.
 - **Rules** (limits, cross-cover priority, windows): edit `timeOffRules.gs` in `timeoff-backend`.
 - **New server URL**: update `API_URL` in `assets/api.js` on all three sites.
 - **New sign-in client**: update `CLIENT_ID` in `assets/api.js` on all three sites.
-  Also update the portal's `session.html` and `TO_API.CLIENT_ID` in `api.gs`.
+  Also update `TO_API.CLIENT_ID` in `api.gs`.
 - **Changes that touch the server too**: use the same branch name in each repository. Merge the pages first.
 
 ## Trying it locally
