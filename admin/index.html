@@ -12,6 +12,7 @@
   <script src="https://accounts.google.com/gsi/client" async></script>
   <script src="../assets/ui.js"></script>
   <script src="../assets/api.js"></script>
+  <script src="../assets/timeoff.js"></script>
 </head>
 <body>
   <header class="top">
@@ -107,32 +108,20 @@
   (function () {
     var state = { view: null, member: '', mode: 'weekend', weekend: '', picks: {}, confirming: false, override: false, busy: false };
     var $ = UI.$, el = UI.el, clear = UI.clear, addDays = UI.addDays, dayLabel = UI.dayLabel, plural = UI.plural, renderSelect = UI.fillSelect;
+    var page = TimeOffPage, custom = TimeOffPage.custom;
     function picked() { return Object.keys(state.picks).sort(); }
+    var call = page.caller(state, showStatus, function () { renderSelection(); });
 
-    /* ── server calls ── */
-    // One request at a time: a second tap or Enter while waiting is ignored.
-    function call(fn, args, onOk) {
-      if (state.busy) return;
-      state.busy = true;
-      UI.busy(true);
-      var done = function () { state.busy = false; state.confirming = false; UI.busy(false); };
-      TimeOffApi.run(fn, args, function (res) { done(); onOk(res); if (state.view) renderSelection(); }, function (err) {
-          done();
-          var lines = [err && err.message ? err.message : String(err)];
-          if (!state.view) lines.push('Reload the page to try again.');
-          showStatus('error', 'Something went wrong', lines);
-          if (state.view) renderSelection();
-        });
-    }
-    function load(month, sync) {
+    /** Reads the month fresh from the calendars (the page's first load, "Sync calendar", a new month or fellow). */
+    function load(month) {
       showStatus('', '', []);
-      call(sync ? 'apiAdminSync' : 'apiAdminGetMonth', [month || '', state.member], render);
+      call('apiAdminGetMonth', [month || '', state.member], render);
     }
 
     /* ── rendering ── */
     function render(view) {
       // A new month starts the custom form fresh, so old dates can't be sent for the wrong month.
-      if (!state.view || state.view.month !== view.month) { $('customLabel').value = ''; $('customStart').value = ''; $('customEnd').value = ''; }
+      if (!state.view || state.view.month !== view.month) custom.reset();
       state.view = view;
       state.member = view.member;
       resetSelection();
@@ -141,7 +130,8 @@
       $('syncInfo').textContent = view.sync ? 'Read from Google Calendar ' + view.sync.at + ': ' +
         plural(view.sync.timeOffEvents, 'time-off event') + ', ' + plural(view.sync.serviceEvents, 'service event') + '.' : '';
       renderTotals();
-      renderOffList();
+      $('offTitle').textContent = 'Already off in ' + view.monthLabel;
+      page.offList($('offList'), view, { extra: overrideForm });
       renderActions();
       renderLog(view.log);
     }
@@ -151,8 +141,6 @@
     function renderTotals() {
       var t = $('totals');
       clear(t);
-      var r = state.view.rules;
-      $('totalsTitle').textContent = 'Vacation days';
       var head = el('tr');
       ['Fellow', 'Used', 'Planned', 'Left'].forEach(function (h) { head.appendChild(el('th', null, h)); });
       t.appendChild(head);
@@ -163,34 +151,6 @@
         tr.appendChild(el('td', 'num', String(r.planned)));
         tr.appendChild(el('td', 'num' + (r.remaining <= 3 ? ' low' : ''), String(r.remaining)));
         t.appendChild(tr);
-      });
-    }
-
-    function renderOffList() {
-      $('offTitle').textContent = 'Already off in ' + state.view.monthLabel;
-      var list = $('offList');
-      clear(list);
-      if (!state.view.offPeriods.length) { list.appendChild(el('li', 'empty', 'No one is off this month.')); return; }
-      state.view.offPeriods.forEach(function (p) {
-        var li = el('li');
-        li.appendChild(el('b', null, p.name));
-        li.appendChild(document.createTextNode(' (' + p.service + ') — ' + p.reason));
-        li.appendChild(el('span', 'when', p.label));
-        var cover = el('span', 'cover');
-        if (p.crossCover.length) {
-          cover.appendChild(document.createTextNode('Cross-cover: '));
-          p.crossCover.forEach(function (c, i) {
-            if (i) cover.appendChild(document.createTextNode('; '));
-            cover.appendChild(el('b', null, c.name));
-            cover.appendChild(document.createTextNode(' (' + c.service + (c.partial ? ', ' + c.label : '') + ')'));
-          });
-        } else {
-          cover.classList.add('missing');
-          cover.textContent = 'Cross-cover: none on the calendar';
-        }
-        li.appendChild(cover);
-        li.appendChild(overrideForm(p));
-        list.appendChild(li);
       });
     }
 
@@ -254,10 +214,7 @@
       $('customForm').style.display = mode === 'custom' ? '' : 'none';
       $('legendRemove').style.display = mode === 'remove' ? '' : 'none';
       $('legendSelect').style.display = mode === 'remove' ? 'none' : '';
-      if (mode === 'custom') {
-        $('customStart').min = v.month + '-01';
-        $('customStart').max = v.grid.filter(function (c) { return c.inMonth; }).slice(-1)[0].key;
-      }
+      if (mode === 'custom') custom.limit(v);
       renderWeekendOptions();
       renderCalendar();
       renderSelection();
@@ -269,35 +226,14 @@
 
     function renderWeekendOptions() {
       var box = $('weekendOptions');
-      clear(box);
-      if (state.mode !== 'weekend') return;
-      (state.override ? state.view.weekendOptionsOverride : state.view.weekendOptions).forEach(function (o) {
-        var b = el('button', 'option');
-        b.type = 'button';
-        b.setAttribute('role', 'radio');
-        b.setAttribute('aria-checked', state.weekend === o.startKey ? 'true' : 'false');
-        b.disabled = !o.available;
-        b.appendChild(el('span', 'dot'));
-        var text = el('span');
-        text.appendChild(el('b', null, o.label));
-        text.appendChild(el('small', null, o.available ? 'Cross-cover: ' + (o.crossCover.join(', ') || 'none needed') : o.reason));
-        b.appendChild(text);
-        b.addEventListener('click', function () {
-          state.weekend = state.weekend === o.startKey ? '' : o.startKey;
-          showStatus('', '', []);
-          renderCalendar();
-          renderWeekendOptions();
-          renderSelection();
-        });
-        box.appendChild(b);
+      if (state.mode !== 'weekend') { clear(box); return; }
+      page.weekendOptions(box, state.override ? state.view.weekendOptionsOverride : state.view.weekendOptions, state.weekend, function (start) {
+        state.weekend = start;
+        showStatus('', '', []);
+        renderCalendar();
+        renderWeekendOptions();
+        renderSelection();
       });
-    }
-
-    function customDays() { return UI.daysFrom($('customStart').value, $('customEnd').value, 62); }
-    /** How many of these days count toward the vacation days (the counted days of the week, from the rules). */
-    function countedOf(days) {
-      var dows = state.view.rules.countedDaysOfWeek || [1, 2, 3, 4, 5];
-      return days.filter(function (k) { return dows.indexOf(UI.weekday(k)) !== -1; }).length;
     }
 
     function cellAction(c) {
@@ -308,31 +244,13 @@
     }
 
     function renderCalendar() {
-      var cal = $('calendar');
-      clear(cal);
-      UI.DOW.forEach(function (d) { cal.appendChild(el('div', 'dow', d)); });
       var chosen = {};
       if (state.mode === 'weekend' && state.weekend) for (var i = 0; i < state.view.rules.weekendLength; i++) chosen[addDays(state.weekend, i)] = true;
-      if (state.mode === 'custom') customDays().forEach(function (k) { chosen[k] = true; });
-      state.view.grid.forEach(function (c) {
-        var action = cellAction(c);
-        var cell = el(action ? 'button' : 'div', 'cell');
-        if (action) { cell.type = 'button'; cell.classList.add('ok'); cell.addEventListener('click', action); }
-        else if (['vacation', 'extra', 'remove'].indexOf(state.mode) !== -1 && c.inMonth) cell.classList.add('muted');
-        if (!c.inMonth) cell.classList.add('out');
-        var dow = UI.weekday(c.key);
-        if (dow === 0 || dow === 6) cell.classList.add('weekendday');
-        if (c.off.some(function (o) { return o.mine; })) cell.classList.add('mine');
-        if (chosen[c.key] || (state.picks[c.key] && state.mode !== 'remove')) cell.classList.add('sel');
-        if (state.picks[c.key] && state.mode === 'remove') cell.classList.add('sel', 'removing');
-        cell.appendChild(el('span', 'num', String(c.day)));
-        c.off.forEach(function (o) {
-          var tag = el('span', 'tag', UI.initials(o.name));
-          tag.title = o.name + (o.reason ? ' – ' + o.reason : '');
-          cell.appendChild(tag);
-        });
-        cell.setAttribute('aria-label', dayLabel(c.key) + (c.off.length ? ', off: ' + c.off.map(function (o) { return o.name; }).join(', ') : ''));
-        cal.appendChild(cell);
+      if (state.mode === 'custom') custom.days(state.view).forEach(function (k) { chosen[k] = true; });
+      page.calendar($('calendar'), state.view.grid, function (c) {
+        var picked = !!state.picks[c.key];
+        return { action: cellAction(c), muted: ['vacation', 'extra', 'remove'].indexOf(state.mode) !== -1,
+          selected: chosen[c.key] || picked, removing: picked && state.mode === 'remove' };
       });
     }
 
@@ -359,9 +277,9 @@
         label = !days.length ? (mode === 'vacation' ? 'Add vacation days' : 'Add extra weekend days')
           : mode === 'vacation' ? 'Add ' + plural(days.length, 'vacation day') : 'Add ' + plural(days.length, 'extra weekend day');
       } else if (mode === 'custom') {
-        var cd = customDays(), lbl = $('customLabel').value.trim();
+        var cd = custom.days(state.view), lbl = $('customLabel').value.trim();
         enabled = cd.length > 0 && !!lbl;
-        text = cd.length ? '"' + name + ' - ' + (lbl || '…') + '": ' + UI.spanLabel(cd[0], cd[cd.length - 1]) + ' (' + plural(countedOf(cd), 'day') + ' counted)' : '';
+        text = cd.length ? '"' + name + ' - ' + (lbl || '…') + '": ' + UI.spanLabel(cd[0], cd[cd.length - 1]) + ' (' + plural(custom.counted(state.view, cd), 'day') + ' counted)' : '';
         label = 'Add time off';
       } else {
         enabled = days.length > 0;
@@ -393,10 +311,9 @@
       else if (mode === 'vacation') call('apiAdminRequestVacation', [m, who, picked(), ov], afterChange('Added to the calendar'));
       else if (mode === 'extra') call('apiAdminAddExtraWeekendDays', [m, who, picked(), ov], afterChange('Added to the calendar'));
       else if (mode === 'custom') {
-        var cd = customDays();
-        call('apiAdminAddCustom', [m, who, $('customLabel').value, cd[0], cd[cd.length - 1], ov], function (res) {
+        call('apiAdminAddCustom', [m, who, $('customLabel').value, custom.first(), custom.last(), ov], function (res) {
           afterChange('Added to the calendar')(res);
-          if (res.ok) { $('customLabel').value = ''; $('customStart').value = ''; $('customEnd').value = ''; renderSelection(); }
+          if (res.ok) { custom.reset(); renderSelection(); }
         });
       } else {
         if (!state.confirming) { state.confirming = true; renderSelection(); return; }
@@ -478,9 +395,9 @@
     function markIssuesStale() { $('checkCard').hidden = true; }
 
     /* ── wiring ── */
-    $('month').addEventListener('change', function (e) { if (!state.view) return; markIssuesStale(); load(e.target.value, false); });
-    $('member').addEventListener('change', function (e) { if (!state.view) return; state.member = e.target.value; load(state.view.month, false); });
-    $('syncBtn').addEventListener('click', function () { markIssuesStale(); load(state.view ? state.view.month : '', true); });
+    $('month').addEventListener('change', function (e) { if (!state.view) return; markIssuesStale(); load(e.target.value); });
+    $('member').addEventListener('change', function (e) { if (!state.view) return; state.member = e.target.value; load(state.view.month); });
+    $('syncBtn').addEventListener('click', function () { markIssuesStale(); load(state.view ? state.view.month : ''); });
     $('checkBtn').addEventListener('click', function () {
       call('apiAdminCheckRules', [state.view ? state.view.month : ''], function (res) { showCheckStatus('', '', []); renderIssues(res); });
     });
@@ -496,7 +413,7 @@
     ['customLabel', 'customStart', 'customEnd'].forEach(function (id) {
       $(id).addEventListener('input', function () {
         if (!state.view) return;
-        if (id === 'customStart' && (!$('customEnd').value || $('customEnd').value < $('customStart').value)) $('customEnd').value = $('customStart').value;
+        if (id !== 'customLabel') custom.limit(state.view);
         renderCalendar();
         renderSelection();
       });
@@ -510,7 +427,7 @@
       renderActions();
     });
     $('submit').addEventListener('click', submit);
-    TimeOffApi.start({ app: 'timeoff', need: 'admin', mainUrl: '../', onReady: function () { load('', true); } });
+    TimeOffApi.start({ app: 'timeoff', need: 'admin', mainUrl: '../', onReady: function () { load(''); } });
   })();
   </script>
 </body>

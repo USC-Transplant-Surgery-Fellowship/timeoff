@@ -12,6 +12,7 @@
   <script src="https://accounts.google.com/gsi/client" async></script>
   <script src="assets/ui.js"></script>
   <script src="assets/api.js"></script>
+  <script src="assets/timeoff.js"></script>
 </head>
 <body>
   <header class="top">
@@ -35,7 +36,7 @@
     <section class="card" id="tally"><div class="loading">Loading…</div></section>
     <section class="card" id="viewerNote" hidden>
       <h2>View only</h2>
-      <p class="hint">You can see who is off and who cross-covers. Only fellows can request time off; admins can make changes on the admin page.</p>
+      <p class="hint" id="viewerText">You can see who is off and who cross-covers. Only fellows can request time off; admins can make changes on the admin page.</p>
     </section>
 
     <section class="card">
@@ -86,22 +87,9 @@
   (function () {
     var state = { view: null, mode: 'weekend', weekend: '', vacation: {}, remove: {}, confirming: false, busy: false };
     var $ = UI.$, el = UI.el, clear = UI.clear, addDays = UI.addDays, dayLabel = UI.dayLabel, plural = UI.plural;
+    var page = TimeOffPage, custom = TimeOffPage.custom;
+    var call = page.caller(state, showStatus, function () { renderSelection(); });
 
-    /* ── server calls ── */
-    // One request at a time: a second tap or Enter while waiting is ignored.
-    function call(fn, args, onOk) {
-      if (state.busy) return;
-      state.busy = true;
-      UI.busy(true);
-      var done = function () { state.busy = false; state.confirming = false; UI.busy(false); };
-      TimeOffApi.run(fn, args, function (res) { done(); onOk(res); if (state.view) renderSelection(); }, function (err) {
-          done();
-          var lines = [err && err.message ? err.message : String(err)];
-          if (!state.view) lines.push('Reload the page to try again.');
-          showStatus('error', 'Something went wrong', lines);
-          if (state.view) renderSelection();
-        });
-    }
     function load(month) {
       showStatus('', '', []);
       call('apiGetMonth', [month || ''], render);
@@ -109,13 +97,13 @@
 
     /* ── rendering ── */
     function render(view) {
-      // A new month starts the conference form fresh, so old dates can't be sent for the wrong month.
-      if (!state.view || state.view.month !== view.month) { $('customLabel').value = ''; $('customStart').value = ''; $('customEnd').value = ''; $('ack').checked = false; }
+      if (!state.view || state.view.month !== view.month) { custom.reset(); $('ack').checked = false; }
       state.view = view;
       resetSelection();
-      renderMonths();
+      UI.fillSelect($('month'), view.months.map(function (m) { return [m.value, m.label]; }), view.month);
       renderTally();
-      renderOffList();
+      $('offTitle').textContent = 'Already off in ' + view.monthLabel;
+      page.offList($('offList'), view, { you: view.canRequest });
       renderRequest();
     }
 
@@ -126,56 +114,15 @@
       state.confirming = false;
     }
 
-    function renderMonths() {
-      var sel = $('month');
-      clear(sel);
-      state.view.months.forEach(function (m) {
-        var o = el('option', null, m.label);
-        o.value = m.value;
-        if (m.value === state.view.month) o.selected = true;
-        sel.appendChild(o);
-      });
-    }
-
     function renderTally() {
       var t = state.view.tally, box = $('tally');
       clear(box);
       box.hidden = !t;
       $('viewerNote').hidden = !!t;
+      if (state.view.viewNote) $('viewerText').textContent = state.view.viewNote; // a fellow in another year
       if (!t) return;
       box.appendChild(el('div', 'tally-head', 'Your vacation days (includes conferences and other non-weekend time off)'));
       box.appendChild(UI.tallyStats(t));
-    }
-
-    function renderOffList() {
-      $('offTitle').textContent = 'Already off in ' + state.view.monthLabel;
-      var list = $('offList');
-      clear(list);
-      if (!state.view.offPeriods.length) {
-        list.appendChild(el('li', 'empty', 'No one is off this month yet.'));
-        return;
-      }
-      state.view.offPeriods.forEach(function (p) {
-        var li = el('li');
-        li.appendChild(el('b', null, p.name));
-        li.appendChild(document.createTextNode(' (' + p.service + ') — ' + p.reason));
-        if (p.mine) li.appendChild(el('span', 'you', 'You'));
-        li.appendChild(el('span', 'when', p.label));
-        var cover = el('span', 'cover');
-        if (p.crossCover.length) {
-          cover.appendChild(document.createTextNode('Cross-cover: '));
-          p.crossCover.forEach(function (c, i) {
-            if (i) cover.appendChild(document.createTextNode('; '));
-            cover.appendChild(el('b', null, c.name));
-            cover.appendChild(document.createTextNode(' (' + c.service + (c.partial ? ', ' + c.label : '') + ')'));
-          });
-        } else {
-          cover.classList.add('missing');
-          cover.textContent = 'Cross-cover: none on the calendar';
-        }
-        li.appendChild(cover);
-        list.appendChild(li);
-      });
     }
 
     function renderRequest() {
@@ -183,7 +130,7 @@
         t.setAttribute('aria-selected', t.getAttribute('data-mode') === state.mode ? 'true' : 'false');
       });
       var v = state.view;
-      // Viewers (and admins who aren't fellows) see the month read-only.
+      // Viewers (and admins, and fellows of another year) see the month read-only.
       $('tabs').hidden = !v.canRequest;
       $('submit').hidden = !v.canRequest;
       $('requestTitle').textContent = v.canRequest ? 'Request or remove time off' : 'Who’s off in ' + v.monthLabel;
@@ -203,15 +150,12 @@
       customTab.hidden = !v.rules.canAddCustom;
       $('tabs').classList.toggle('tabs4', !!v.rules.canAddCustom);
       if (state.mode === 'custom' && !v.rules.canAddCustom) state.mode = 'weekend';
+      if (state.mode === 'view') state.mode = 'weekend';
       $('customForm').style.display = state.mode === 'custom' ? '' : 'none';
       $('ackRow').style.display = v.rules.customAcknowledge ? '' : 'none';
       $('customLabel').maxLength = v.rules.customNameMax || 80;
       if (state.mode === 'custom') {
-        $('customStart').min = v.month + '-01';
-        $('customStart').max = v.grid.filter(function (c) { return c.inMonth; }).slice(-1)[0].key;
-        $('customEnd').min = $('customStart').value || $('customStart').min;
-      }
-      if (state.mode === 'custom') {
+        custom.limit(v);
         var pastCustom = (v.rules.pastKinds || []).indexOf('custom') !== -1;
         $('hint').textContent = 'For a conference or other time off that isn’t a weekend or vacation. It goes on the calendar as "' +
           v.fellowName + ' - <what it is>", its ' + v.rules.countedDays + ' days count toward your ' + v.rules.vacationLimit +
@@ -249,69 +193,27 @@
 
     function renderWeekendOptions() {
       var box = $('weekendOptions');
-      clear(box);
       box.style.display = state.mode === 'weekend' ? '' : 'none';
-      if (state.mode !== 'weekend') return;
-      if (!state.view.weekendOptions.length) box.appendChild(el('p', 'empty', 'No weekends left to choose this month.'));
-      state.view.weekendOptions.forEach(function (o) {
-        var b = el('button', 'option');
-        b.type = 'button';
-        b.setAttribute('role', 'radio');
-        b.setAttribute('aria-checked', state.weekend === o.startKey ? 'true' : 'false');
-        b.disabled = !o.available;
-        b.appendChild(el('span', 'dot'));
-        var text = el('span');
-        text.appendChild(el('b', null, o.label));
-        text.appendChild(el('small', null, o.available ? 'Cross-cover: ' + (o.crossCover.join(', ') || 'none needed') : o.reason));
-        b.appendChild(text);
-        b.addEventListener('click', function () {
-          state.weekend = state.weekend === o.startKey ? '' : o.startKey;
-          showStatus('', '', []);
-          renderRequest();
-        });
-        box.appendChild(b);
+      if (state.mode !== 'weekend') { clear(box); return; }
+      page.weekendOptions(box, state.view.weekendOptions, state.weekend, function (start) {
+        state.weekend = start;
+        showStatus('', '', []);
+        renderRequest();
       });
     }
 
     function renderCalendar() {
-      var cal = $('calendar');
-      clear(cal);
-      UI.DOW.forEach(function (d) { cal.appendChild(el('div', 'dow', d)); });
       var weekendDays = {}, customChosen = {};
-      if (state.mode === 'custom') customDays().forEach(function (k) { customChosen[k] = true; });
+      if (state.mode === 'custom') custom.days(state.view).forEach(function (k) { customChosen[k] = true; });
       if (state.mode === 'weekend' && state.weekend && state.view.canRequest) {
         for (var i = 0; i < state.view.rules.weekendLength; i++) weekendDays[addDays(state.weekend, i)] = true;
       }
-      state.view.grid.forEach(function (c) {
-        var clickable = (state.mode === 'vacation' && c.vacationOk) || (state.mode === 'remove' && c.removeDays.length > 0);
-        var cell = el(clickable ? 'button' : 'div', 'cell');
-        if (clickable) { cell.type = 'button'; cell.classList.add('ok'); }
-        else if ((state.mode === 'vacation' || state.mode === 'remove') && c.inMonth) cell.classList.add('muted');
-        if (!c.inMonth) cell.classList.add('out');
-        if (c.past && c.inMonth) cell.classList.add('past');
-        var dow = UI.weekday(c.key);
-        if (dow === 0 || dow === 6) cell.classList.add('weekendday');
-        if (c.off.some(function (o) { return o.mine; })) cell.classList.add('mine');
-        if (weekendDays[c.key] || state.vacation[c.key] || customChosen[c.key]) cell.classList.add('sel');
-        if (state.remove[c.key]) cell.classList.add('sel', 'removing');
-        cell.appendChild(el('span', 'num', String(c.day)));
-        c.off.forEach(function (o) {
-          var tag = el('span', 'tag', UI.initials(o.name));
-          tag.title = o.name + (o.reason ? ' – ' + o.reason : '');
-          cell.appendChild(tag);
-        });
-        var label = dayLabel(c.key) + (c.off.length ? ', off: ' + c.off.map(function (o) { return o.name; }).join(', ') : '');
-        cell.setAttribute('aria-label', label);
-        if (clickable) {
-          if (state.mode === 'vacation') {
-            cell.setAttribute('aria-pressed', state.vacation[c.key] ? 'true' : 'false');
-            cell.addEventListener('click', function () { toggleVacation(c.key); });
-          } else {
-            cell.setAttribute('aria-pressed', state.remove[c.key] ? 'true' : 'false');
-            cell.addEventListener('click', function () { toggleRemove(c.removeDays); });
-          }
-        }
-        cal.appendChild(cell);
+      page.calendar($('calendar'), state.view.grid, function (c) {
+        var action = null;
+        if (state.mode === 'vacation' && c.vacationOk) action = function () { toggleVacation(c.key); };
+        if (state.mode === 'remove' && c.removeDays.length) action = function () { toggleRemove(c.removeDays); };
+        return { action: action, muted: state.mode === 'vacation' || state.mode === 'remove',
+          selected: !!(weekendDays[c.key] || state.vacation[c.key] || customChosen[c.key] || state.remove[c.key]), removing: !!state.remove[c.key] };
       });
     }
 
@@ -329,13 +231,6 @@
       showStatus('', '', []);
       renderCalendar();
       renderSelection();
-    }
-
-    function customDays() { return UI.daysFrom($('customStart').value, $('customEnd').value, 62); }
-    /** How many of these days count toward the vacation days (the counted days of the week, from the rules). */
-    function countedOf(days) {
-      var dows = state.view.rules.countedDaysOfWeek || [1, 2, 3, 4, 5];
-      return days.filter(function (k) { return dows.indexOf(UI.weekday(k)) !== -1; }).length;
     }
 
     function toggleRemove(days) {
@@ -359,10 +254,10 @@
         btn.disabled = !state.weekend;
         btn.textContent = 'Request weekend off';
       } else if (state.mode === 'custom') {
-        var cd = customDays(), lbl = $('customLabel').value.trim();
+        var cd = custom.days(state.view), lbl = $('customLabel').value.trim();
         if (cd.length) {
           box.appendChild(el('b', null, '"' + state.view.fellowName + ' - ' + (lbl || '…') + '": '));
-          box.appendChild(document.createTextNode(UI.spanLabel(cd[0], cd[cd.length - 1]) + ' (' + plural(countedOf(cd), 'day') + ' counted)'));
+          box.appendChild(document.createTextNode(UI.spanLabel(cd[0], cd[cd.length - 1]) + ' (' + plural(custom.counted(state.view, cd), 'day') + ' counted)'));
           var others = {};
           state.view.grid.forEach(function (c) {
             if (cd.indexOf(c.key) !== -1) c.off.forEach(function (o) { if (!o.mine) others[o.name] = true; });
@@ -411,9 +306,8 @@
         if (!state.confirming) { state.confirming = true; renderSelection(); return; }
         call('apiRemoveTimeOff', [month, Object.keys(state.remove).sort()], done);
       } else if (state.mode === 'custom') {
-        var cd = customDays();
-        call('apiRequestCustom', [month, $('customLabel').value, cd[0], cd[cd.length - 1], $('ack').checked], function (res) {
-          if (res.ok) { $('customLabel').value = ''; $('customStart').value = ''; $('customEnd').value = ''; $('ack').checked = false; }
+        call('apiRequestCustom', [month, $('customLabel').value, custom.first(), custom.last(), $('ack').checked], function (res) {
+          if (res.ok) { custom.reset(); $('ack').checked = false; }
           done(res);
         });
       } else if (state.mode === 'weekend') call('apiRequestWeekend', [month, state.weekend], done);
@@ -435,8 +329,7 @@
     ['customLabel', 'customStart', 'customEnd', 'ack'].forEach(function (id) {
       $(id).addEventListener(id === 'ack' ? 'change' : 'input', function () {
         if (!state.view) return;
-        if (id === 'customStart' && (!$('customEnd').value || $('customEnd').value < $('customStart').value)) $('customEnd').value = $('customStart').value;
-        if (id === 'customStart') $('customEnd').min = $('customStart').value;
+        if (id === 'customStart' || id === 'customEnd') custom.limit(state.view);
         showStatus('', '', []);
         renderCalendar();
         renderSelection();

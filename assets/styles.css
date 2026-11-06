@@ -130,6 +130,15 @@ button { -webkit-tap-highlight-color: transparent; }
 .eyebrow { font: 800 14px/1.2 'Doto', monospace; letter-spacing: .01em; opacity: .9; animation: lcd-flicker .45s steps(3) .15s both; }
 /* The dates the sites cover (from the server, after sign-in), shown once here instead of in every section title. */
 .lcd-range { display: block; margin-top: 6px; font: 800 15px/1.2 'Doto', monospace; letter-spacing: .01em; }
+/* May–July: a switch between this academic year and the next, in the same display. */
+.lcd-years { display: flex; flex-wrap: wrap; gap: 6px; }
+.lcd-year {
+  font: 800 15px/1.2 'Doto', monospace; letter-spacing: .01em; color: var(--lcd-ink); background: transparent;
+  border: 2px solid var(--lcd-ink); border-radius: 6px; padding: 3px 8px; cursor: pointer; min-height: 32px; opacity: .65;
+}
+.lcd-year[aria-pressed="true"] { background: var(--lcd-ink); color: var(--lcd); opacity: 1; }
+.lcd-year:hover, .lcd-year:focus-visible { opacity: 1; }
+.lcd-year:focus-visible { outline: 3px solid var(--lcd-ink); outline-offset: 2px; }
 h1 {
   display: inline-block;
   margin: 4px 0 0;

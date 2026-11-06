@@ -70,8 +70,8 @@
   function dayLabel(k) { var p = ymd(k); return DOW[weekday(k)] + ' ' + p[1] + '/' + p[2]; }
   function spanLabel(a, b) { return !b || a === b ? dayLabel(a) : dayLabel(a) + ' – ' + dayLabel(b); }
   function monthLabel(m) { var p = ymd(m); return MONTHS[p[1] - 1] + ' ' + p[0]; }
-  function todayKey() { var d = new Date(); return d.getFullYear() + '-' + ('0' + (d.getMonth() + 1)).slice(-2) + '-' + ('0' + d.getDate()).slice(-2); }
-  /** Every day from a through b (b defaults to a; nothing if b is before a), at most max days. */
+  /** Every day from a through b (b defaults to a; nothing if b is before a), at most max days. (Dates come from the
+   *  server, which knows the fellowship's time zone, so there is deliberately no "today" here.) */
   function daysFrom(a, b, max) {
     var days = [];
     b = b || a;
@@ -86,6 +86,6 @@
     showStatus: showStatus, fillLog: fillLog, tallyStats: tallyStats,
     plural: plural, initials: initials, shortNames: shortNames,
     weekday: weekday, addDays: addDays, addMonths: addMonths, dayLabel: dayLabel, spanLabel: spanLabel, monthLabel: monthLabel,
-    todayKey: todayKey, daysFrom: daysFrom,
+    daysFrom: daysFrom,
   };
 })();
