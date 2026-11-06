@@ -1,17 +1,17 @@
 /*
- * Shared by the time-off page (index.html) and its admin page (admin/index.html): the parts both draw the same way.
- * Each page keeps what is different about it (what can be tapped, the admin's extra controls) and passes it in.
- *   TimeOffPage.caller(state, showStatus, renderSelection)  → call(fn, args, onOk): one request at a time
- *   TimeOffPage.offList(ul, view, opts)      the "Already off" list; opts.you: mark the signed-in fellow's own;
- *                                            opts.extra(period): an element to add to each (the admin's controls)
- *   TimeOffPage.weekendOptions(box, options, selected, onPick)
- *   TimeOffPage.calendar(box, grid, cell)    the month grid; cell(c) → { action, selected, removing } for each day
- *   TimeOffPage.custom                       the conference/other form: its days, how many count, the date limits
+ * Parts that the time-off page (index.html) and its admin page (admin/index.html) draw the same way.
+ * Each page passes in what differs: what people can tap, and the admin's extra controls.
+ *   TimeOffPage.caller(state, showStatus, renderSelection)  → call(fn, args, onOk). Runs one request at a time.
+ *   TimeOffPage.offList(ul, view, opts)      The "Already off" list. opts.you marks the signed-in fellow's own.
+ *                                            opts.extra(period) returns an element to append (the admin's controls).
+ *   TimeOffPage.weekendOptions(box, options, selected, onPick)   The weekend radio buttons.
+ *   TimeOffPage.calendar(box, grid, cell)    The month grid. cell(c) → { action, selected, removing } per day.
+ *   TimeOffPage.custom                       The conference/other form: its days, counted days and date limits.
  */
 (function () {
   var el = UI.el, clear = UI.clear, dayLabel = UI.dayLabel, addDays = UI.addDays, $ = UI.$;
 
-  /** One request at a time: a second tap or Enter while waiting is ignored. */
+  /** Runs one request at a time. It ignores a second tap or Enter while a request runs. */
   function caller(state, showStatus, renderSelection) {
     return function call(fn, args, onOk) {
       if (state.busy) return;
@@ -58,7 +58,7 @@
     });
   }
 
-  /** The weekends that can be picked this month, as radio buttons (those that can't say why). */
+  /** This month's weekends as radio buttons. Unavailable weekends show the reason. */
   function weekendOptions(box, options, selected, onPick) {
     clear(box);
     if (!options.length) box.appendChild(el('p', 'empty', 'No weekends left to choose this month.'));
@@ -120,11 +120,12 @@
       var dows = view.rules.countedDaysOfWeek;
       return days.filter(function (k) { return dows.indexOf(UI.weekday(k)) !== -1; }).length;
     },
-    /** Empties the form (a new month starts fresh, so old dates can't be sent for the wrong month). */
+    /** Empties the form. Each month starts fresh, so old dates never reach the wrong month. */
     reset: function () { $('customLabel').value = ''; $('customStart').value = ''; $('customEnd').value = ''; },
     /**
-     * The date limits: the first day in the month shown; the last day from the first through CUSTOM_MAX_DAYS later,
-     * and never past the end of the academic year (July 31). A last day before the first moves up to it.
+     * Sets the date limits. The first day must fall in the month shown.
+     * The last day must fall within customMaxDays of the first, and on or before July 31 (the year's end).
+     * A last day before the first moves up to match it.
      */
     limit: function (view) {
       var start = $('customStart'), end = $('customEnd');

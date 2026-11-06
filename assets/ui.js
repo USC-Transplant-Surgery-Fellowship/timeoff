@@ -1,7 +1,7 @@
 /*
- * Shared by all three sites (time off, call schedule, portal; keep the copies identical): small helpers the pages use
- * for building the page, dates ('yyyy-MM-dd' keys and 'yyyy-MM' months) and status messages.
- * Each page picks what it needs: var $ = UI.$, el = UI.el, …
+ * Small page helpers for all three sites. Keep this file identical in timeoff, schedule and portal.
+ * It covers building elements, dates ('yyyy-MM-dd' days, 'yyyy-MM' months) and status messages.
+ * Each page takes what it needs: var $ = UI.$, el = UI.el, …
  */
 (function () {
   var DOW = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];

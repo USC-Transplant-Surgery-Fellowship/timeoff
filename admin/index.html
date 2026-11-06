@@ -120,7 +120,7 @@
 
     /* ── rendering ── */
     function render(view) {
-      // A new month starts the custom form fresh, so old dates can't be sent for the wrong month.
+      // Each month starts the custom form fresh, so old dates never reach the wrong month.
       if (!state.view || state.view.month !== view.month) custom.reset();
       state.view = view;
       state.member = view.member;
@@ -189,7 +189,7 @@
 
     function renderActions() {
       var v = state.view, mode = state.mode;
-      // No time-off fellows yet (they are added in the portal): nothing to change.
+      // No time-off fellows yet (admins add them in the portal), so there is nothing to change.
       $('makeCard').hidden = !v.member;
       if (!v.member) return;
       Array.prototype.forEach.call(document.querySelectorAll('.tab'), function (t) {

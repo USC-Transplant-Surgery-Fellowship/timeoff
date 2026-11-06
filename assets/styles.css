@@ -1,16 +1,17 @@
 /*
- * The fellowship sites — time off, call schedule and portal — share these styles (keep the copies identical).
- * Each site adds its own file for what only it uses (schedule.css, portal.css).
+ * Styles for all three sites. Keep this file identical in timeoff, schedule and portal.
+ * Site-only styles live in schedule.css and portal.css.
  *
- * The idea: the header is a pager. A USC-cardinal case with a backlit LCD screen that wakes up when the page loads
- * (the only animation that plays on its own). Everything below is quiet: pale scrub-green paper with a faint
- * perforated-tray texture, plain sheets, keys you can press, and OR-style hatching for weekends.
+ * Design: the header is a pager. A USC-cardinal case holds a backlit LCD screen.
+ * The screen lights up on page load. No other animation plays on its own.
+ * The rest stays quiet: pale scrub-green paper, a faint perforated texture, plain sheets and pressable keys.
+ * Weekends get OR-style hatching.
  *
  * Fonts (self-hosted in assets/fonts, SIL Open Font License):
- *   Doto                       — dot-matrix, only on the pager screen
- *   Atkinson Hyperlegible Next — everything else; designed by the Braille Institute for legibility
+ *   Doto                       — dot-matrix, pager screen only
+ *   Atkinson Hyperlegible Next — everything else. The Braille Institute designed it for legibility
  *
- * Colors live in the variables right below; the dark ("night call") version follows them.
+ * Colors live in the variables below. The dark ("night call") theme follows them.
  */
 @font-face {
   font-family: 'Atkinson Hyperlegible Next';
@@ -311,9 +312,9 @@ select:hover, input:hover { border-color: var(--muted); }
 .cell.mine .tag { color: var(--gold-ink); background: var(--gold); }
 .cell.weekendday { background-image: repeating-linear-gradient(135deg, var(--hatch) 0 2px, transparent 2px 7px); }
 .cell.out, .cell.past:not(.ok):not(.sel), .cell.muted { opacity: .4; }
-button.cell.ok.past:not(.sel) { opacity: .72; border-style: dashed; } /* past days that can still be picked */
+button.cell.ok.past:not(.sel) { opacity: .72; border-style: dashed; } /* past days still open for picking */
 button.cell { cursor: pointer; }
-button.cell.ok { border-color: var(--line-strong); box-shadow: 0 2px 0 var(--line-strong); } /* pickable days are raised keys */
+button.cell.ok { border-color: var(--line-strong); box-shadow: 0 2px 0 var(--line-strong); } /* raised keys mark pickable days */
 button.cell.ok:hover { border-color: var(--accent); }
 button.cell:active { transform: translateY(2px); box-shadow: none; }
 .cell.sel {

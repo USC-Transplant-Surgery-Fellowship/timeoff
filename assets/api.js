@@ -1,40 +1,44 @@
 /*
- * Shared by all three sites (time off, call schedule, portal; keep the copies identical): settings, signing in
- * ("Sign in with Google", or a code emailed to any address), one sign-in for all the sites, and calls to the server
- * (Google Apps Script).
+ * Sign-in and server calls for all three sites. Keep this file identical in timeoff, schedule and portal.
  *
- * SETTINGS — change these if the Apps Script deployment, the Google sign-in client or the portal's address changes:
- *   API_URL:   the Apps Script web app URL (Deploy → Manage deployments → Web app URL, ends in /exec)
- *   CLIENT_ID: the OAuth "Web application" client ID from Google Cloud (must match TO_API.CLIENT_ID in api.gs)
- *   HUB_URL:   the portal's session.html, which remembers the sign-in for all the sites (see below)
- *   SIGNUP_URL: the portal's sign-up page, for people who aren't on the member list yet
- * A page can use other values (e.g. for testing) by setting window.SITE_API_URL / SITE_HUB_URL / SITE_SIGNUP_URL before this file loads.
+ * SETTINGS. Update these when the deployment, the sign-in client or the portal address changes.
+ *   API_URL     Apps Script web-app URL (Deploy → Manage deployments → Web app URL, ending in /exec).
+ *   CLIENT_ID   Google Cloud OAuth "Web application" client ID. Must match TO_API.CLIENT_ID in api.gs.
+ *   HUB_URL     The portal's session.html, which keeps one sign-in for all three sites.
+ *   SIGNUP_URL  The portal's sign-up page, for people not on the member list.
+ * For testing, set window.SITE_API_URL, SITE_HUB_URL or SITE_SIGNUP_URL before this file loads.
  *
- * Signing in: with Google, or by asking for a 6-digit code at any email address and typing it in (the server checks it
- * and gives a sign-in that lasts days rather than an hour). Either way, the member list in the portal decides what
- * someone may do. People who aren't on it are pointed to the sign-up page, or told their sign-up is waiting for approval.
+ * SIGNING IN
+ *   - People sign in with Google, or with a 6-digit code emailed to any address.
+ *   - A code sign-in lasts days. A Google sign-in lasts an hour.
+ *   - The portal's member list decides what each person may do.
+ *   - Non-members see a sign-up link, or a note that their sign-up awaits approval.
  *
- * One sign-in for all the sites: after someone signs in on any site, the token is kept by the portal's session.html
- * (opened invisibly in each page), so the other sites use it too instead of asking again. Signing out on one site
- * signs out of all of them. If session.html can't be reached (or on a page opened from a file), each site keeps its
- * own sign-in for the browser tab, as before.
+ * ONE SIGN-IN FOR ALL SITES
+ *   - Each page opens the portal's session.html in a hidden frame. It stores the token for all three sites.
+ *   - Signing out on one site signs out of all three.
+ *   - Without session.html (a file preview, or a network problem), each tab keeps its own sign-in.
  *
- * Academic years: the pages show one August–July year at a time, the one the server says (who.year). From May 1 to
- * July 31 two years are open, and the header's display shows a switch between them; choosing one reloads the page on
- * that year (kept for this tab). A link can ask for a year with ?year=2027 (the schedule emails do). Every call to
- * the server says which year the page is on, so the server only ever answers for that year.
+ * ACADEMIC YEARS
+ *   - Each page shows one August–July year: the one the server returns in who.year.
+ *   - From May 1 to July 31, two years are open. The header shows a switch between them.
+ *   - Choosing a year reloads the page on it. The tab remembers the choice.
+ *   - A link can request a year with ?year=2027. The schedule emails do this.
+ *   - Every server call names the page's year. The server answers only for that year.
  *
- * Each page calls TimeOffApi.start({ app, need, onReady, mainUrl?, adminUrl?, years?, signInMessage? }) and then
- * TimeOffApi.run(fn, args, onOk, onFail).
- *   app:  'timeoff' | 'schedule' | 'portal' — whose roles count (set in the portal).
- *   need: 'viewer' (anyone with a role in the app) | 'admin' | 'any' (anyone signed in, e.g. the sign-up page).
- *   mainUrl / adminUrl: this site's other page, linked in the header for people who can use it.
- *   years: false for pages that don't depend on the year (the portal): no switch, just the current year's dates.
- *   signInMessage: what the sign-in card says (instead of the usual).
- * Also: TimeOffApi.googleButton(box, onCredential) draws a "Sign in with Google" button that hands the chosen account's
- * token to the page instead of signing in with it (the portal's "use a Google account"), and TimeOffApi.signInWith(token)
- * switches the page to another sign-in.
- * The page needs these elements: #who (in the header), #auth (sign-in / messages), #app (the page itself, hidden at first).
+ * USE
+ *   TimeOffApi.start({ app, need, onReady, mainUrl?, adminUrl?, years?, signInMessage? }), then
+ *   TimeOffApi.run(fn, args, onOk, onFail).
+ *     app            'timeoff' | 'schedule' | 'portal': whose roles count.
+ *     need           'viewer' (any role in the app) | 'admin' | 'any' (anyone signed in, as on the sign-up page).
+ *     mainUrl        This site's other page. The header links to it for people who may use it.
+ *     adminUrl       Same, for the admin page.
+ *     years          false for pages without a year (the portal). They show no switch.
+ *     signInMessage  Replaces the sign-in card's usual text.
+ *   TimeOffApi.googleButton(box, onCredential) draws a Google button. The chosen account's token goes to the page.
+ *   TimeOffApi.signInWith(token) switches the page to another sign-in.
+ *   TimeOffApi.signOut() and TimeOffApi.callPublic(fn, args) are also available.
+ *   Each page needs #who (header), #auth (sign-in and messages) and #app (the page, hidden at first).
  */
 (function () {
   var CONFIG = {
@@ -43,7 +47,7 @@
     HUB_URL: window.SITE_HUB_URL != null ? window.SITE_HUB_URL : 'https://portal.usctransplant.life/session.html',
     SIGNUP_URL: window.SITE_SIGNUP_URL || 'https://portal.usctransplant.life/signup.html',
   };
-  var EMAIL_KEY = 'fellowship.lastEmail'; // remembered so the email box is filled in next time
+  var EMAIL_KEY = 'fellowship.lastEmail'; // pre-fills the code form next time
   var TOKEN_KEY = 'timeoff.idToken';
   var YEAR_KEY = 'fellowship.year';       // the academic year chosen in this tab
   var opts = null, gisReady = false;
@@ -85,8 +89,8 @@
   /** Remembers (or forgets, t = '') the sign-in here and for the other sites. */
   function setToken(t) { setLocalToken(t); hubAsk(t ? 'set' : 'clear', t); }
   /**
-   * The current sign-in: the shared one if the hub answers (so signing out on another site signs this tab out too),
-   * else this tab's own. → Promise of a token or ''.
+   * The current sign-in → Promise of a token or ''. Prefers the hub's shared token, so a sign-out elsewhere
+   * reaches this tab. Falls back to this tab's own token.
    */
   function getToken() {
     return hubAsk('get').then(function (m) {
@@ -146,7 +150,7 @@
   function linkButton(text, fn) { var b = el('button', 'linkbtn', text); b.type = 'button'; b.addEventListener('click', fn); return b; }
 
   /* ── Google sign-in ── */
-  /* Waits for Google's sign-in script (up to 20 seconds: it can be blocked, and the emailed code still works). */
+  /* Waits up to 20 seconds for Google's sign-in script. Blockers can stop it; the emailed code still works. */
   function whenGis(fn, tries) {
     if (window.google && google.accounts && google.accounts.id) { if (!gisReady) { gisReady = true; initGis(); } fn(); return; }
     if ((tries || 0) > 200) return;
@@ -159,7 +163,7 @@
         if (onGoogle) { onGoogle(resp.credential); return; }
         setToken(resp.credential); checkWho();
       },
-      auto_select: true,               // returning people are signed in again without a click
+      auto_select: true,               // signs returning people in again without a click
       cancel_on_tap_outside: false,
       use_fedcm_for_prompt: true,
     });
@@ -295,7 +299,7 @@
     });
   }
 
-  /* "Signed in as …", then links: this site's other page, the other sites (their admin pages from an admin page), Sign out. */
+  /* The header: "Signed in as …", this site's other page, the other sites, and Sign out. Admin pages link to admin pages. */
   function renderHeader(who) {
     var w = $('who'); clear(w);
     w.appendChild(el('span', 'who-name', 'Signed in as ' + (who.name || who.email)));
@@ -360,7 +364,7 @@
 
   window.TimeOffApi = {
     googleButton: googleButton,
-    /** Switches to another sign-in (e.g. the Google account just made the primary email), then starts the page again. */
+    /** Switches to another sign-in, such as the Google account the person made primary. Then restarts the page. */
     signInWith: function (token) { onGoogle = null; setToken(token); checkWho(); },
     signOut: function () { signOut(); },
     /** The calls that work without signing in (e.g. the welcome page reading its invitation) → Promise. */
