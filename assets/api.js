@@ -4,9 +4,9 @@
  * SETTINGS. Update these when the deployment, the sign-in client or the portal address changes.
  *   API_URL     Apps Script web-app URL (Deploy → Manage deployments → Web app URL, ending in /exec).
  *   CLIENT_ID   Google Cloud OAuth "Web application" client ID. Must match TO_API.CLIENT_ID in api.gs.
- *   HUB_URL     The portal's session.html, which keeps one sign-in for all three sites.
+ *   COOKIE_DOMAIN  The domain all three sites share. Its cookie holds the one sign-in for all of them.
  *   SIGNUP_URL  The portal's sign-up page, for people not on the member list.
- * For testing, set window.SITE_API_URL, SITE_HUB_URL or SITE_SIGNUP_URL before this file loads.
+ * For testing, set window.SITE_API_URL, SITE_COOKIE_DOMAIN or SITE_SIGNUP_URL before this file loads.
  *
  * SIGNING IN
  *   - People sign in with Google, or with a 6-digit code emailed to any address.
@@ -15,9 +15,9 @@
  *   - Non-members see a sign-up link, or a note that their sign-up awaits approval.
  *
  * ONE SIGN-IN FOR ALL SITES
- *   - Each page opens the portal's session.html in a hidden frame. It stores the token for all three sites.
- *   - Signing out on one site signs out of all three.
- *   - Without session.html (a file preview, or a network problem), each tab keeps its own sign-in.
+ *   - A cookie for usctransplant.life holds the token. All three sites read it, Safari included.
+ *   - Signing out on one site signs out of all three. Open pages notice at their next request.
+ *   - Off that domain (previews, a file), each tab keeps its own sign-in.
  *
  * ACADEMIC YEARS
  *   - Each page shows one August–July year: the one the server returns in who.year.
@@ -44,7 +44,7 @@
   var CONFIG = {
     API_URL: window.SITE_API_URL || 'https://script.google.com/macros/s/AKfycbzyKKmoG8PJAqDHuNzXEINMw3gUfY-ctND7aSqzrDCV0l6P8C_SYY6VmU3IzIcYFb76/exec',
     CLIENT_ID: '72967386715-cgntqve43vc2ptpkhprgalf714vtke38.apps.googleusercontent.com',
-    HUB_URL: window.SITE_HUB_URL != null ? window.SITE_HUB_URL : 'https://portal.usctransplant.life/session.html',
+    COOKIE_DOMAIN: window.SITE_COOKIE_DOMAIN != null ? window.SITE_COOKIE_DOMAIN : 'usctransplant.life',
     SIGNUP_URL: window.SITE_SIGNUP_URL || 'https://portal.usctransplant.life/signup.html',
   };
   var EMAIL_KEY = 'fellowship.lastEmail'; // pre-fills the code form next time
@@ -77,74 +77,42 @@
     } catch (e) { return null; }
   }
   function fresh(t) { var p = t && tokenPayload(t); return !!(p && p.exp * 1000 > Date.now() + 60000); }
-  function localToken() {
+  /*
+   * Where the sign-in lives. On the live sites, a cookie for the whole domain (COOKIE_DOMAIN) holds it,
+   * so every site reads the same one. Safari keeps storage inside a hidden frame apart per site, so a cookie it is.
+   * The cookie lasts until the token expires. Each request sends the token itself; the server never reads the cookie.
+ * Browsers also send the cookie to GitHub Pages with each page request. GitHub serves the pages already.
+   * Elsewhere (previews, a file), each tab keeps its own sign-in in sessionStorage.
+   */
+  var COOKIE = 'fellowship_signin';
+  function shared() {
+    var d = CONFIG.COOKIE_DOMAIN, h = location.hostname;
+    return !!d && location.protocol === 'https:' && navigator.cookieEnabled && (h === d || h.slice(-d.length - 1) === '.' + d);
+  }
+  function readCookie() {
+    var m = document.cookie.match(new RegExp('(?:^|; )' + COOKIE + '=([^;]*)'));
+    return m ? decodeURIComponent(m[1]) : '';
+  }
+  function writeCookie(t) {
+    var p = t && tokenPayload(t), secs = p ? Math.floor(p.exp - Date.now() / 1000) : 0;
+    document.cookie = COOKIE + '=' + (secs > 0 ? encodeURIComponent(t) : '') + '; Domain=' + CONFIG.COOKIE_DOMAIN +
+      '; Path=/; Max-Age=' + Math.max(secs, 0) + '; Secure; SameSite=Strict';
+  }
+  /** The current sign-in, or '' if none or expired. */
+  function currentToken() {
     var t = '';
-    try { t = sessionStorage.getItem(TOKEN_KEY) || ''; } catch (e) { t = window.__timeOffToken || ''; }
+    if (shared()) t = readCookie();
+    else { try { t = sessionStorage.getItem(TOKEN_KEY) || ''; } catch (e) { t = window.__timeOffToken || ''; } }
     return fresh(t) ? t : '';
   }
-  function setLocalToken(t) {
+  /** Remembers (or forgets, t = '') the sign-in for all three sites. */
+  function setToken(t) {
+    if (shared()) { writeCookie(t); return; }
     window.__timeOffToken = t;
     try { if (t) sessionStorage.setItem(TOKEN_KEY, t); else sessionStorage.removeItem(TOKEN_KEY); } catch (e) { /* private mode */ }
   }
-  /** Remembers (or forgets, t = '') the sign-in here and for the other sites. */
-  function setToken(t) { setLocalToken(t); hubAsk(t ? 'set' : 'clear', t); }
-  /**
-   * The current sign-in → Promise of a token or ''. Prefers the hub's shared token, so a sign-out elsewhere
-   * reaches this tab. Falls back to this tab's own token.
-   */
-  function getToken() {
-    return hubAsk('get').then(function (m) {
-      if (m && typeof m.token === 'string') { setLocalToken(fresh(m.token) ? m.token : ''); return localToken(); }
-      return localToken();
-    });
-  }
-
-  /* ── the shared sign-in (session.html on the portal, in a hidden frame) ── */
-  var hub = { ready: null, frame: null, origin: '', waiting: {}, seq: 0, up: false, pending: null };
-  /**
-   * → Promise of true once session.html answers, or false at once where it can't (no https).
-   * It never gives up: a hub that loads slowly, on a phone say, still works for every later question.
-   */
-  function hubReady() {
-    if (hub.ready) return hub.ready;
-    hub.ready = new Promise(function (resolve) {
-      try { hub.origin = new URL(CONFIG.HUB_URL).origin; } catch (e) { hub.origin = ''; }
-      if (!hub.origin || location.protocol !== 'https:') { resolve(false); return; }
-      var f = document.createElement('iframe');
-      f.src = CONFIG.HUB_URL; f.title = 'Sign-in for the fellowship sites'; f.hidden = true; f.tabIndex = -1; f.setAttribute('aria-hidden', 'true');
-      window.addEventListener('message', function (e) {
-        if (e.origin !== hub.origin || e.source !== f.contentWindow || !e.data) return;
-        if (e.data.type === 'hub-ready') {
-          // A sign-in made here before the hub answered reaches the other sites now.
-          if (!hub.up && hub.pending) f.contentWindow.postMessage({ type: hub.pending.type, id: 'late', token: hub.pending.token }, hub.origin);
-          hub.up = true; resolve(true); return;
-        }
-        var done = hub.waiting[e.data.id];
-        if (done) { delete hub.waiting[e.data.id]; done(e.data); }
-      });
-      hub.frame = f;
-      (document.body || document.documentElement).appendChild(f);
-    });
-    return hub.ready;
-  }
-  /**
-   * Asks the hub (type 'get' | 'set' | 'clear') → Promise of its answer, or null if it isn't there.
-   * Waits up to HUB_WAIT_MS for the hub to load. A sign-in that can't wait is handed over when the hub loads.
-   */
-  var HUB_WAIT_MS = 8000;
-  function hubAsk(type, token) {
-    if (type !== 'get') hub.pending = { type: type, token: token || '' };
-    var late = new Promise(function (resolve) { setTimeout(function () { resolve(false); }, HUB_WAIT_MS); });
-    return Promise.race([hubReady(), late]).then(function (ok) {
-      if (!ok) return null;
-      return new Promise(function (resolve) {
-        var id = 'm' + (++hub.seq);
-        hub.waiting[id] = resolve;
-        setTimeout(function () { if (hub.waiting[id]) { delete hub.waiting[id]; resolve(null); } }, 3000);
-        hub.frame.contentWindow.postMessage({ type: type, id: id, token: token || '' }, hub.origin);
-      });
-    });
-  }
+  /** → Promise of the current sign-in. Read fresh each call, so a sign-out on another site reaches this page. */
+  function getToken() { return Promise.resolve(currentToken()); }
 
   /* ── small DOM helpers ── */
   function $(id) { return document.getElementById(id); }
@@ -248,7 +216,7 @@
   }
   function signOut() {
     // Cancels an emailed-code sign-in on the server too, so a copy of it elsewhere stops working. Never waits for it.
-    var t = localToken();
+    var t = currentToken();
     if (t) post(Object.assign({ fn: 'apiSignOut', args: [], idToken: t }, from())).then(null, function () { /* signed out here anyway */ });
     setToken('');
     if (window.google && google.accounts && google.accounts.id) google.accounts.id.disableAutoSelect();
