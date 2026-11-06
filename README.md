@@ -2,7 +2,7 @@
 
 The time-off request site for the USC Transplant Surgery Fellowship: **https://timeoff.usctransplant.life**
 
-- **Fellows** request a Thursday–Sunday weekend off or vacation days, see who else is off and who cross-covers, add their own conferences and other time off (counted toward the 20 days), and remove their own time off. They can look at any month of the year; vacation and conference days can be added or removed on past dates too (weekends only before they start).
+- **Fellows** request a Thursday–Sunday weekend off or vacation days, see who else is off and who cross-covers, add their own conferences and other time off (counted toward the 20 days), and remove their own time off. They can look at any month of the year shown at the top (from May 1 they can switch to next year, so incoming fellows can plan; on Aug 1 the old year goes away); vacation and conference days can be added or removed on past dates too (weekends only before they start).
 - **Viewers** (people with the viewer role, set in the portal) see who is off each month and who cross-covers.
 - **Admins** (`/admin/`) do the same for any fellow, past or future, assign extra weekend days and custom time off, change cross-cover, see everyone's totals, and check the whole calendar against the rules (with buttons to fix what it finds).
 
@@ -34,7 +34,8 @@ This repository holds **only the pages**. There is no personal data here. The sc
 ## Making changes
 
 - **Page changes**: edit the HTML/CSS here and commit to `main`. GitHub Pages publishes within a minute or two.
-- **Shared files** (`assets/styles.css`, `assets/ui.js`, `assets/api.js`, fonts) are the same on all three sites: make the same change in the `schedule` and `portal` repositories (their **Shared files** check warns when the copies differ).
+- **Shared files** (`assets/styles.css`, `assets/ui.js`, `assets/api.js`, fonts) are the same on all three sites: make the same change in the `schedule` and `portal` repositories (their **Shared files** check fails when the copies differ, and so does the server repository's settings check).
+- **`assets/timeoff.js`**: what the time-off page and its admin page draw the same way (the month grid, the weekend choices, the "Already off" list, the conference form and its date limits). Change it once for both pages.
 - **Rule changes** (limits, cross-cover priority, …): these are in `timeOffRules.gs` in the private `timeoff-backend` repository, not here.
 - **If the Apps Script deployment URL changes**, update `API_URL` in `assets/api.js` (on all three sites).
 - **If the Google sign-in client changes**, update `CLIENT_ID` in `assets/api.js` (all three sites), in the portal's `session.html`, *and* `TO_API.CLIENT_ID` in the Apps Script project.
