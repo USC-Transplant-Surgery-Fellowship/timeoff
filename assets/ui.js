@@ -81,7 +81,7 @@
   }
 
   window.UI = {
-    DOW: DOW, MONTHS: MONTHS,
+    DOW: DOW,
     $: $, el: el, clear: clear, busy: busy, button: button, confirmButton: confirmButton, fillSelect: fillSelect,
     showStatus: showStatus, fillLog: fillLog, tallyStats: tallyStats,
     plural: plural, initials: initials, shortNames: shortNames,
