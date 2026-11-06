@@ -232,7 +232,7 @@
   function signOut() {
     // Cancels an emailed-code sign-in on the server too, so a copy of it elsewhere stops working. Never waits for it.
     var t = localToken();
-    if (t) post({ fn: 'apiSignOut', args: [], idToken: t }).then(null, function () { /* signed out here anyway */ });
+    if (t) post(Object.assign({ fn: 'apiSignOut', args: [], idToken: t }, from())).then(null, function () { /* signed out here anyway */ });
     setToken('');
     if (window.google && google.accounts && google.accounts.id) google.accounts.id.disableAutoSelect();
     showSignIn('You are signed out of the fellowship sites.');
@@ -325,9 +325,11 @@
       throw new Error('Could not reach the server. Check your internet connection and try again.');
     });
   }
-  /** The two calls that work before signing in (asking for and checking an emailed code). */
+  /** Which site and page is calling (for the activity record super admins see in the portal). */
+  function from() { return { app: opts ? opts.app : '', admin: !!(opts && opts.need === 'admin') }; }
+  /** The calls that work before signing in (asking for and checking an emailed code, reading an invitation). */
   function callPublic(fn, args) {
-    return post({ fn: fn, args: args || [] }).then(function (res) {
+    return post(Object.assign({ fn: fn, args: args || [] }, from())).then(function (res) {
       if (res.ok) return res.result;
       throw Object.assign(new Error(res.error || 'Something went wrong.'), { code: res.code });
     });
@@ -339,7 +341,7 @@
   function call(fn, args) {
     return getToken().then(function (token) {
       if (!token) throw authError('You’re signed out, or your sign-in has expired. Please sign in again.');
-      return post({ fn: fn, args: args || [], idToken: token, year: pageYear() }).then(function (res) {
+      return post(Object.assign({ fn: fn, args: args || [], idToken: token, year: pageYear() }, from())).then(function (res) {
         if (res.ok) return res.result;
         if (res.code === 'auth') { setToken(''); throw authError(res.error); }
         throw Object.assign(new Error(res.error || 'Something went wrong.'), { code: res.code });
