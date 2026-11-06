@@ -19,10 +19,16 @@
  * signs out of all of them. If session.html can't be reached (or on a page opened from a file), each site keeps its
  * own sign-in for the browser tab, as before.
  *
- * Each page calls TimeOffApi.start({ app, need, onReady, mainUrl?, adminUrl? }) and then TimeOffApi.run(fn, args, onOk, onFail).
+ * Academic years: the pages show one August–July year at a time, the one the server says (who.year). From May 1 to
+ * July 31 two years are open, and the header's display shows a switch between them; choosing one reloads the page on
+ * that year (kept for this tab). A link can ask for a year with ?year=2027 (the schedule emails do). Every call to
+ * the server says which year the page is on, so the server only ever answers for that year.
+ *
+ * Each page calls TimeOffApi.start({ app, need, onReady, mainUrl?, adminUrl?, years? }) and then TimeOffApi.run(fn, args, onOk, onFail).
  *   app:  'timeoff' | 'schedule' | 'portal' — whose roles count (set in the portal).
  *   need: 'viewer' (anyone with a role in the app) | 'admin' | 'any' (anyone signed in, e.g. the sign-up page).
  *   mainUrl / adminUrl: this site's other page, linked in the header for people who can use it.
+ *   years: false for pages that don't depend on the year (the portal): no switch, just the current year's dates.
  * The page needs these elements: #who (in the header), #auth (sign-in / messages), #app (the page itself, hidden at first).
  */
 (function () {
@@ -34,7 +40,23 @@
   };
   var EMAIL_KEY = 'fellowship.lastEmail'; // remembered so the email box is filled in next time
   var TOKEN_KEY = 'timeoff.idToken';
+  var YEAR_KEY = 'fellowship.year';       // the academic year chosen in this tab
   var opts = null, gisReady = false;
+
+  /* ── the academic year this page is on ── */
+  function storedYear() { try { return sessionStorage.getItem(YEAR_KEY) || ''; } catch (e) { return window.__fellowshipYear || ''; } }
+  function storeYear(y) { window.__fellowshipYear = String(y || ''); try { if (y) sessionStorage.setItem(YEAR_KEY, String(y)); else sessionStorage.removeItem(YEAR_KEY); } catch (e) { /* private mode */ } }
+  (function yearFromLink() {
+    var q = null;
+    try { q = new URLSearchParams(location.search); } catch (e) { return; }
+    if (!/^\d{4}$/.test(q.get('year') || '')) return;
+    storeYear(q.get('year'));
+    q.delete('year');
+    try { history.replaceState(null, '', location.pathname + (q.toString() ? '?' + q.toString() : '') + location.hash); } catch (e) { /* file preview */ }
+  })();
+  function pageYear() { return opts && opts.years === false ? '' : storedYear(); }
+  /** Switches the page to another year: remembered for this tab, then the page starts again on it. */
+  function switchYear(y) { storeYear(y); location.href = location.pathname; }
 
   /* ── the sign-in token (Google's tokens last an hour) ── */
   function tokenPayload(t) {
@@ -56,7 +78,10 @@
   }
   /** Remembers (or forgets, t = '') the sign-in here and for the other sites. */
   function setToken(t) { setLocalToken(t); hubAsk(t ? 'set' : 'clear', t); }
-  /** The current sign-in: the shared one if the hub answers, else this tab's own. → Promise of a token or ''. */
+  /**
+   * The current sign-in: the shared one if the hub answers (so signing out on another site signs this tab out too),
+   * else this tab's own. → Promise of a token or ''.
+   */
   function getToken() {
     return hubAsk('get').then(function (m) {
       if (m && typeof m.token === 'string') { setLocalToken(fresh(m.token) ? m.token : ''); return localToken(); }
@@ -115,9 +140,11 @@
   function linkButton(text, fn) { var b = el('button', 'linkbtn', text); b.type = 'button'; b.addEventListener('click', fn); return b; }
 
   /* ── Google sign-in ── */
-  function whenGis(fn) {
+  /* Waits for Google's sign-in script (up to 20 seconds: it can be blocked, and the emailed code still works). */
+  function whenGis(fn, tries) {
     if (window.google && google.accounts && google.accounts.id) { if (!gisReady) { gisReady = true; initGis(); } fn(); return; }
-    setTimeout(function () { whenGis(fn); }, 100);
+    if ((tries || 0) > 200) return;
+    setTimeout(function () { whenGis(fn, (tries || 0) + 1); }, 100);
   }
   function initGis() {
     google.accounts.id.initialize({
@@ -193,6 +220,9 @@
     return box;
   }
   function signOut() {
+    // Cancels an emailed-code sign-in on the server too, so a copy of it elsewhere stops working. Never waits for it.
+    var t = localToken();
+    if (t) post({ fn: 'apiSignOut', args: [], idToken: t }).then(null, function () { /* signed out here anyway */ });
     setToken('');
     if (window.google && google.accounts && google.accounts.id) google.accounts.id.disableAutoSelect();
     showSignIn('You are signed out of the fellowship sites.');
@@ -220,7 +250,8 @@
         return;
       }
       renderHeader(who);
-      showRange(who.range);
+      if (pageYear() && String(who.year) !== pageYear()) storeYear(who.year); // that year isn't open any more
+      showRange(who);
       showApp(true);
       opts.onReady(who);
     }, function (err) {
@@ -229,13 +260,29 @@
     });
   }
 
-  /* The dates the sites cover ("Aug 2026 – Jul 2027"), shown once in the header's display for every page. */
-  function showRange(range) {
+  /*
+   * The year's dates ("Aug 2026 – Jul 2027"), shown once in the header's display on every page. When two years are
+   * open (May–July), a switch between them instead.
+   */
+  function showRange(who) {
     var lcd = document.querySelector('.lcd');
-    if (!lcd || !range) return;
+    if (!lcd || !who.range) return;
     var r = lcd.querySelector('.lcd-range');
     if (!r) { r = el('div', 'lcd-range'); lcd.appendChild(r); }
-    r.textContent = range;
+    clear(r);
+    var years = who.years || [];
+    if (opts.years === false || years.length < 2) { r.textContent = who.range; return; }
+    r.classList.add('lcd-years');
+    r.setAttribute('role', 'group');
+    r.setAttribute('aria-label', 'Academic year');
+    years.forEach(function (y) {
+      var b = el('button', 'lcd-year', y.name);
+      b.type = 'button';
+      b.title = y.short;
+      b.setAttribute('aria-pressed', y.year === who.year ? 'true' : 'false');
+      b.addEventListener('click', function () { if (y.year !== who.year) switchYear(y.year); });
+      r.appendChild(b);
+    });
   }
 
   /* "Signed in as …", then links: this site's other page, the other sites (their admin pages from an admin page), Sign out. */
@@ -280,10 +327,9 @@
     return Object.assign(new Error(message), { code: 'auth' });
   }
   function call(fn, args) {
-    var local = localToken();
-    return (local ? Promise.resolve(local) : getToken()).then(function (token) {
-      if (!token) throw authError('Your sign-in has expired. Please sign in again.');
-      return post({ fn: fn, args: args || [], idToken: token }).then(function (res) {
+    return getToken().then(function (token) {
+      if (!token) throw authError('You’re signed out, or your sign-in has expired. Please sign in again.');
+      return post({ fn: fn, args: args || [], idToken: token, year: pageYear() }).then(function (res) {
         if (res.ok) return res.result;
         if (res.code === 'auth') { setToken(''); throw authError(res.error); }
         throw Object.assign(new Error(res.error || 'Something went wrong.'), { code: res.code });
@@ -292,7 +338,6 @@
   }
 
   window.TimeOffApi = {
-    config: CONFIG,
     /** opts: { app: 'timeoff' | 'schedule' | 'portal', need: 'viewer' | 'admin' | 'any', onReady(who), mainUrl?, adminUrl? } */
     start: function (o) {
       opts = o;
@@ -301,6 +346,5 @@
     },
     /** Like google.script.run: run(fn, args, onOk, onFail). */
     run: function (fn, args, onOk, onFail) { call(fn, args).then(onOk, onFail); },
-    signOut: signOut,
   };
 })();
