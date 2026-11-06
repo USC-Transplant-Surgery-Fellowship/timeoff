@@ -224,6 +224,9 @@ select {
   background-repeat: no-repeat;
 }
 select:hover, input:hover { border-color: var(--muted); }
+/* iPhone date fields keep their own minimum width and spill out of narrow columns. Let them shrink and fill. */
+input[type="date"] { -webkit-appearance: none; appearance: none; display: block; min-width: 0; max-width: 100%; text-align: left; line-height: 24px; }
+input[type="date"]::-webkit-date-and-time-value { text-align: left; }
 
 /* ── vacation tally ── */
 .tally-head { font-size: 14px; color: var(--muted); margin-bottom: 10px; }
@@ -425,6 +428,7 @@ body.busy main { opacity: .6; pointer-events: none; transition: opacity .15s; }
 .customform { margin-bottom: 14px; }
 .customform input { margin-bottom: 10px; }
 .daterow { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.daterow > *, .pick > * { min-width: 0; } /* grid columns may shrink below their content's width */
 
 /* ── recent changes (both admin pages) ── */
 .log { list-style: none; margin: 0; padding: 0 6px 0 0; font-size: 14px; }

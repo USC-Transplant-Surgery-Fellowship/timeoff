@@ -100,7 +100,11 @@
   }
 
   /* ── the shared sign-in (session.html on the portal, in a hidden frame) ── */
-  var hub = { ready: null, frame: null, origin: '', waiting: {}, seq: 0 };
+  var hub = { ready: null, frame: null, origin: '', waiting: {}, seq: 0, up: false, pending: null };
+  /**
+   * → Promise of true once session.html answers, or false at once where it can't (no https).
+   * It never gives up: a hub that loads slowly, on a phone say, still works for every later question.
+   */
   function hubReady() {
     if (hub.ready) return hub.ready;
     hub.ready = new Promise(function (resolve) {
@@ -108,10 +112,13 @@
       if (!hub.origin || location.protocol !== 'https:') { resolve(false); return; }
       var f = document.createElement('iframe');
       f.src = CONFIG.HUB_URL; f.title = 'Sign-in for the fellowship sites'; f.hidden = true; f.tabIndex = -1; f.setAttribute('aria-hidden', 'true');
-      var timer = setTimeout(function () { resolve(false); }, 2500);
       window.addEventListener('message', function (e) {
         if (e.origin !== hub.origin || e.source !== f.contentWindow || !e.data) return;
-        if (e.data.type === 'hub-ready') { clearTimeout(timer); resolve(true); return; }
+        if (e.data.type === 'hub-ready') {
+          // A sign-in made here before the hub answered reaches the other sites now.
+          if (!hub.up && hub.pending) f.contentWindow.postMessage({ type: hub.pending.type, id: 'late', token: hub.pending.token }, hub.origin);
+          hub.up = true; resolve(true); return;
+        }
         var done = hub.waiting[e.data.id];
         if (done) { delete hub.waiting[e.data.id]; done(e.data); }
       });
@@ -120,9 +127,15 @@
     });
     return hub.ready;
   }
-  /** Asks the hub (type 'get' | 'set' | 'clear') → Promise of its answer, or null if it isn't there. */
+  /**
+   * Asks the hub (type 'get' | 'set' | 'clear') → Promise of its answer, or null if it isn't there.
+   * Waits up to HUB_WAIT_MS for the hub to load. A sign-in that can't wait is handed over when the hub loads.
+   */
+  var HUB_WAIT_MS = 8000;
   function hubAsk(type, token) {
-    return hubReady().then(function (ok) {
+    if (type !== 'get') hub.pending = { type: type, token: token || '' };
+    var late = new Promise(function (resolve) { setTimeout(function () { resolve(false); }, HUB_WAIT_MS); });
+    return Promise.race([hubReady(), late]).then(function (ok) {
       if (!ok) return null;
       return new Promise(function (resolve) {
         var id = 'm' + (++hub.seq);
